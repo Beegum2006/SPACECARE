@@ -1,0 +1,112 @@
+[
+  {
+    "study_id": "OSD-140",
+    "title": "Dynamic nature of epigenetic patterns observed during the Mars 520-d mission simulation",
+    "description": "Long-term ground-based spaceflight simulation to evaluate human physiological and psychological adaptation to prolonged confinement, isolation, and altered diurnal cycles. Investigated longitudinal DNA methylation profiles, mood state dynamics, and biochemical stress indicators across 6 crew members during the 520-day Mars500 mission simulation.",
+    "organism": "Homo sapiens",
+    "target_tissue": "Whole blood, Saliva, Urine",
+    "mission": "Mars500 Confinement Simulation",
+    "flight_duration_days": 520,
+    "assay_type": "Epigenomics (DNA Methylation) & Biochemical Profiling",
+    "platform": "Illumina HumanMethylation450 BeadChip",
+    "principal_investigator": "Dr. Igor Borisov & International Mars500 Research Consortium",
+    "sample_count": 6,
+    "key_findings": [
+      "Demonstrated that long-term isolation induces genome-wide DNA methylation remodeling as an active physiological adaptation.",
+      "Identified progressive methylation shifts in immune-regulatory and circadian rhythm genes during extended confinement.",
+      "Established a psychology-epigenome-metabolism model correlating subjective isolation stress with epigenetic reprogramming."
+    ],
+    "doi": "10.1016/j.isci.2022.104493",
+    "repository_url": "https://osdr.nasa.gov/bio/repo/data/studies/OSD-140",
+    "provenance_type": "CURATED_NASA_REFERENCE_METADATA",
+    "verification_status": "VERIFIED"
+  },
+  {
+    "study_id": "OSD-316",
+    "title": "Plasticity of the human IgM repertoire in response to a long-term spaceflight",
+    "description": "High-throughput immune repertoire sequencing measuring heavy chain immunoglobulin M (IgM) repertoires in cosmonauts completing long-duration orbital missions aboard the International Space Station. Examined V(D)J recombination dynamics and adaptive immune alterations pre-flight, in-flight (64 and 129 days), and post-landing.",
+    "organism": "Homo sapiens",
+    "target_tissue": "Peripheral Blood Mononuclear Cells (PBMC)",
+    "mission": "International Space Station (ISS Long-Duration Expeditions)",
+    "flight_duration_days": 180,
+    "assay_type": "High-Throughput Immune Repertoire Sequencing (Rep-Seq)",
+    "platform": "Illumina MiSeq",
+    "principal_investigator": "Jean-Pol Frippiat (Lorraine University) & Roscosmos/ESA Team",
+    "sample_count": 5,
+    "key_findings": [
+      "Demonstrated marked reduction in V-D-J recombination diversity in peripheral IgM repertoires during orbital flight.",
+      "Observed individual-specific repertoire shifts and clonal selection under microgravity and space radiation stress.",
+      "Repertoire diversity demonstrated phased recovery toward pre-flight baseline within 30 days post-landing."
+    ],
+    "doi": "10.1096/fj.202001403RR",
+    "repository_url": "https://osdr.nasa.gov/bio/repo/data/studies/OSD-316",
+    "provenance_type": "CURATED_NASA_REFERENCE_METADATA",
+    "verification_status": "VERIFIED"
+  },
+  {
+    "study_id": "OSD-174",
+    "title": "Effects of a Closed Space Environment on Gene Expression in Hair Follicles of Astronauts in the International Space Station",
+    "description": "Non-invasive human physiological biomarker monitoring aboard the International Space Station. Investigated transcriptomic shifts and structural gene expression changes in hair follicles sampled from 10 astronauts across Expeditions 20, 21, and 22 using DNA microarray and qPCR.",
+    "organism": "Homo sapiens",
+    "target_tissue": "Scalp Hair Follicles",
+    "mission": "ISS Expeditions 20, 21, and 22",
+    "flight_duration_days": 165,
+    "assay_type": "Microarray Transcriptomics & Real-time qPCR",
+    "platform": "Affymetrix GeneChip Human Genome U133 Plus 2.0",
+    "principal_investigator": "Dr. Masahiro Terada (JAXA) & NASA Space Life Sciences",
+    "sample_count": 10,
+    "key_findings": [
+      "Identified spaceflight-induced downregulation of keratin-associated protein (KRTAP) gene families.",
+      "Observed upregulation of cellular stress-response and DNA repair pathways in follicular sheath cells.",
+      "Demonstrated feasibility of non-invasive hair follicle sampling for longitudinal genomic surveillance in spaceflight."
+    ],
+    "doi": "10.1371/journal.pone.0150801",
+    "repository_url": "https://osdr.nasa.gov/bio/repo/data/studies/OSD-174",
+    "provenance_type": "CURATED_NASA_REFERENCE_METADATA",
+    "verification_status": "VERIFIED"
+  },
+  {
+    "study_id": "OSD-816",
+    "title": "The ex vivo human translaminar autonomous system to study spaceflight associated neuro-ocular syndrome pathogenesis (Retina, RT-PCR and electroretinography)",
+    "description": "Investigation into the molecular pathogenesis of Spaceflight-Associated Neuro-ocular Syndrome (SANS). Utilized an ex vivo human translaminar autonomous system (TAS) to model cephalad hydrostatic pressure shifts and microgravity analogs on primary retinal tissue.",
+    "organism": "Homo sapiens",
+    "target_tissue": "Human Retinal Tissue",
+    "mission": "NASA Space Biology Ground Analog Program",
+    "flight_duration_days": 30,
+    "assay_type": "RT-PCR, RNA-Seq & Electroretinography",
+    "platform": "Illumina NovaSeq 6000 & Ex Vivo Perfusion Chamber",
+    "principal_investigator": "Dr. Patricia Chevez-Barrios & NASA SANS Research Group",
+    "sample_count": 8,
+    "key_findings": [
+      "Hydrostatic translaminar pressure gradients induced significant retinal ganglion cell stress and barrier disruption.",
+      "Observed differential expression in vascular permeability and neuro-inflammatory markers associated with optic disc edema.",
+      "Provided cellular proof-of-concept for the choroidal folds and visual acuity shifts documented in long-duration astronauts."
+    ],
+    "doi": "10.26030/sans-osd816",
+    "repository_url": "https://osdr.nasa.gov/bio/repo/data/studies/OSD-816",
+    "provenance_type": "CURATED_NASA_REFERENCE_METADATA",
+    "verification_status": "VERIFIED"
+  },
+  {
+    "study_id": "OSD-943",
+    "title": "Longitudinal transcriptomic and epigenetic analysis in astronauts reveals dynamic immune response to spaceflight [DNA methylation]",
+    "description": "Epigenetic profiling of astronauts from the Axiom Space Ax-1 commercial mission to the ISS (April 2022). Investigated short-term and persistent DNA methylation signatures pre-flight, in-flight, and post-flight across human whole blood samples.",
+    "organism": "Homo sapiens",
+    "target_tissue": "Whole Blood",
+    "mission": "Axiom Space Ax-1 Commercial Mission to ISS",
+    "flight_duration_days": 17,
+    "assay_type": "DNA Methylation Microarray",
+    "platform": "Illumina Infinium Human MethylationEPIC BeadChip",
+    "principal_investigator": "Dr. Christopher Mason & Space Omics and Medical Atlas (SOMA) Consortium",
+    "sample_count": 4,
+    "key_findings": [
+      "Identified dynamic DNA methylation shifts in pathways governing cell apoptosis and immune system activation.",
+      "Documented significant epigenetic linkage to genes associated with bone density regulation (FBLIM1, IHH, SCAMP2).",
+      "Demonstrated that short-duration orbital flight (17 days) elicits systemic epigenetic stress responses comparable to long-duration stays."
+    ],
+    "doi": "10.26030/dtc0-6s93",
+    "repository_url": "https://osdr.nasa.gov/bio/repo/data/studies/OSD-943",
+    "provenance_type": "CURATED_NASA_REFERENCE_METADATA",
+    "verification_status": "VERIFIED"
+  }
+]

@@ -1,0 +1,216 @@
+/* ============================================================================
+   SPACECARE Mission Control CSS Styling
+   Aero/Space Dark UI theme with NASA aesthetics & high-contrast telemetry
+   ============================================================================ */
+
+/* Global body and main container adjustments */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+code, .metric-value, .mono-font {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Header & Mission Bar */
+.mission-header-bar {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(11, 61, 145, 0.25));
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 12px;
+    padding: 18px 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    backdrop-filter: blur(8px);
+}
+
+.mission-title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: #f8fafc;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mission-subtitle {
+    color: #94a3b8;
+    font-size: 0.9rem;
+    margin-top: 4px;
+    margin-bottom: 0;
+}
+
+.met-clock {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.15rem;
+    color: #38bdf8;
+    background: rgba(14, 165, 233, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    border-radius: 6px;
+    padding: 6px 14px;
+    display: inline-block;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+
+/* Provenance Badges */
+.badge-real-nasa {
+    background: linear-gradient(135deg, #0b3d91, #1e40af);
+    color: #ffffff !important;
+    border: 1px solid #60a5fa;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+}
+
+.badge-simulated {
+    background: linear-gradient(135deg, #581c87, #6b21a8);
+    color: #f3e8ff !important;
+    border: 1px solid #c084fc;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
+}
+
+/* Medical Disclaimer Banner */
+.disclaimer-banner {
+    background: rgba(15, 23, 42, 0.85);
+    border-left: 4px solid #f59e0b;
+    border-top: 1px solid rgba(245, 158, 11, 0.2);
+    border-right: 1px solid rgba(245, 158, 11, 0.2);
+    border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 6px;
+    padding: 10px 16px;
+    margin: 12px 0 20px 0;
+    font-size: 0.82rem;
+    color: #cbd5e1;
+    line-height: 1.4;
+}
+
+.disclaimer-banner strong {
+    color: #fbbf24;
+}
+
+/* Telemetry Cards */
+.telemetry-card {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 14px;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.telemetry-card:hover {
+    border-color: #38bdf8;
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+}
+
+.telemetry-card.nominal {
+    border-left: 4px solid #10b981;
+}
+
+.telemetry-card.advisory {
+    border-left: 4px solid #38bdf8;
+}
+
+.telemetry-card.warning {
+    border-left: 4px solid #f59e0b;
+}
+
+.telemetry-card.critical {
+    border-left: 4px solid #ef4444;
+    animation: pulse-critical 2s infinite;
+}
+
+@keyframes pulse-critical {
+    0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); }
+    50% { box-shadow: 0 0 22px rgba(239, 68, 68, 0.6); }
+}
+
+.telemetry-label {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+}
+
+.telemetry-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 2px;
+}
+
+.telemetry-unit {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: 400;
+    margin-left: 4px;
+}
+
+.telemetry-sub {
+    font-size: 0.76rem;
+    color: #64748b;
+}
+
+/* Status indicator pills */
+.status-pill {
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    display: inline-block;
+}
+
+.status-pill.nominal {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.status-pill.warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.status-pill.critical {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #090d16;
+}
+::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+}

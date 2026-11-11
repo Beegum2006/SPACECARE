@@ -1,0 +1,21 @@
+# SPACECARE - NASA Astronaut Health Monitoring & Early Warning System
+# Core Dependencies
+
+# Web Application Framework
+streamlit>=1.35.0
+
+# Data Processing and Numerical Operations
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Machine Learning & Anomaly Detection
+scikit-learn>=1.4.0
+
+# Interactive Visualizations & Charting
+plotly>=5.20.0
+
+# HTTP Requests for NASA Open APIs
+requests>=2.31.0
+
+# Testing
+pytest>=8.0.0

@@ -1,0 +1,13 @@
+timestamp,module,cabin_pressure_psi,co2_partial_pressure_mmhg,o2_percentage,temperature_celsius,relative_humidity_pct,mission_payload,source,provenance_type
+2024-03-15T00:00:00Z,Destiny Laboratory (US Lab),14.71,2.65,21.05,22.1,45.2,ISS Expedition 70 Baseline,NASA ECLSS Engineering Baseline Reference,REFERENCE_FIXTURE_DERIVED_FROM_PUBLISHED_DATA
+2024-03-15T04:00:00Z,Destiny Laboratory (US Lab),14.69,2.78,21.02,22.3,46.0,ISS Expedition 70 Baseline,NASA ECLSS Engineering Baseline Reference,REFERENCE_FIXTURE_DERIVED_FROM_PUBLISHED_DATA
+2024-03-15T08:00:00Z,Destiny Laboratory (US Lab),14.72,2.95,20.98,22.8,48.5,ISS Expedition 70 Baseline (Crew Exercise Shift),NASA ECLSS Engineering Baseline Reference,REFERENCE_FIXTURE_DERIVED_FROM_PUBLISHED_DATA
+2024-03-15T12:00:00Z,Destiny Laboratory (US Lab),14.70,3.12,21.00,23.1,49.2,ISS Expedition 70 Baseline,NASA ECLSS Engineering Baseline Reference,REFERENCE_FIXTURE_DERIVED_FROM_PUBLISHED_DATA
+2024-03-15T16:00:00Z,Columbus Orbital Facility (ESA),14.68,2.70,21.08,21.9,44.8,ISS Expedition 70 Baseline,NASA ECLSS Engineering Baseline Reference,REFERENCE_FIXTURE_DERIVED_FROM_PUBLISHED_DATA
+2024-03-15T20:00:00Z,Columbus Orbital Facility (ESA),14.70,2.62,21.10,21.7,43.5,ISS Expedition 70 Baseline,NASA ECLSS Engineering Baseline Reference,REFERENCE_FIXTURE_DERIVED_FROM_PUBLISHED_DATA
+2024-03-16T00:00:00Z,Harmony (Node 2),14.72,2.80,21.04,22.0,46.1,ISS Expedition 70 Baseline,NASA ECLSS Engineering Baseline Reference,REFERENCE_FIXTURE_DERIVED_FROM_PUBLISHED_DATA
+2024-03-16T04:00:00Z,Harmony (Node 2),14.71,2.85,21.01,22.2,46.8,ISS Expedition 70 Baseline,NASA ECLSS Engineering Baseline Reference,REFERENCE_FIXTURE_DERIVED_FROM_PUBLISHED_DATA
+2024-03-16T08:00:00Z,Harmony (Node 2),14.73,3.05,20.97,22.7,49.0,ISS Expedition 70 Baseline (Crew Exercise Shift),NASA ECLSS Engineering Baseline Reference,REFERENCE_FIXTURE_DERIVED_FROM_PUBLISHED_DATA
+2024-03-16T12:00:00Z,Destiny Laboratory (US Lab),14.70,2.90,21.03,22.4,47.3,ISS Expedition 70 Baseline,NASA ECLSS Engineering Baseline Reference,REFERENCE_FIXTURE_DERIVED_FROM_PUBLISHED_DATA
+2024-03-16T16:00:00Z,Destiny Laboratory (US Lab),14.69,2.75,21.07,22.0,45.5,ISS Expedition 70 Baseline,NASA ECLSS Engineering Baseline Reference,REFERENCE_FIXTURE_DERIVED_FROM_PUBLISHED_DATA
+2024-03-16T20:00:00Z,Destiny Laboratory (US Lab),14.71,2.68,21.09,21.8,44.2,ISS Expedition 70 Baseline,NASA ECLSS Engineering Baseline Reference,REFERENCE_FIXTURE_DERIVED_FROM_PUBLISHED_DATA
