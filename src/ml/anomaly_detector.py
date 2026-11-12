@@ -11,30 +11,23 @@ IMPORTANT & DISCLAIMER:
 - It is trained strictly on wearable physiological vitals, NOT mixed with omics assays or environmental logs.
 """
 
-import os
 import joblib
 import numpy as np
-import pandas as pd
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 
+from src.ml.feature_engineering import FEATURE_NAMES, extract_feature_matrix
+from src.simulation.vitals_generator import generate_vitals_series
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MODEL_DIR = PROJECT_ROOT / "data" / "models"
 DEFAULT_MODEL_PATH = MODEL_DIR / "isolation_forest.joblib"
 
 # 7 core wearable physiological vitals
-VITAL_FEATURES = [
-    "heart_rate",
-    "blood_pressure_sys",
-    "blood_pressure_dia",
-    "spo2",
-    "core_temperature",
-    "respiration_rate",
-    "hrv_rmssd"
-]
+VITAL_FEATURES = FEATURE_NAMES
 
 DEFAULT_PHYSIOLOGICAL_BASELINES = {
     "heart_rate": 70.0,
@@ -75,26 +68,24 @@ class AstronautAnomalyDetector:
         self.training_sample_count = 0
 
     def _prepare_matrix(self, readings: List[Dict[str, Any]]) -> np.ndarray:
-        """Extracts and imputes feature vectors from telemetry dictionaries."""
-        matrix = []
-        for r in readings:
-            row = []
-            for f in self.feature_names:
-                val = r.get(f)
-                if val is None or (isinstance(val, (int, float)) and np.isnan(val)):
-                    val = np.nan
-                else:
-                    try:
-                        val = float(val)
-                    except (ValueError, TypeError):
-                        val = np.nan
-                row.append(val)
-            matrix.append(row)
+        """Extract the shared seven-feature matrix; missing values remain NaN for imputation."""
+        return extract_feature_matrix(readings)
 
-        arr = np.array(matrix, dtype=np.float64)
-        if arr.ndim == 1:
-            arr = arr.reshape(1, -1)
-        return arr
+    def train_on_baseline(self, readings: List[Dict[str, Any]]) -> bool:
+        """Compatibility alias used by the original model.py implementation."""
+        return self.train(readings)
+
+    def train_with_astronaut_baseline(
+        self, astronaut: Dict[str, Any], count: int = 100
+    ) -> bool:
+        """Train from a generated nominal baseline when database history is unavailable."""
+        nominal_readings = generate_vitals_series(
+            astronaut=astronaut,
+            count=count,
+            interval_seconds=10,
+            anomaly_mode="NOMINAL",
+        )
+        return self.train(nominal_readings)
 
     def train(self, training_readings: List[Dict[str, Any]]) -> bool:
         """
@@ -105,7 +96,9 @@ class AstronautAnomalyDetector:
             return False
 
         X = self._prepare_matrix(training_readings)
-        
+        if np.all(np.isnan(X), axis=0).any():
+            return False
+
         # Fit imputer and scaler
         X_imputed = self.imputer.fit_transform(X)
         X_scaled = self.scaler.fit_transform(X_imputed)

@@ -150,9 +150,11 @@ def evaluate_vitals_for_alerts(
         if not is_duplicate_active_alert(title, ast_id):
             proto = get_protocol("ML_MULTIVARIATE_ANOMALY")
             top_features = []
-            for feat, data in ml_result.get("feature_attributions", {}).items():
-                if data.get("severity") in ("WARNING", "CRITICAL"):
-                    top_features.append(f"{data['label']} (Z: {data['z_score']})")
+            for feat, data in ml_result.get("feature_contributions", {}).items():
+                if data.get("deviation_severity") in ("HIGH", "MODERATE"):
+                    top_features.append(
+                        f"{feat} (Z: {data['z_score']})"
+                    )
             feat_text = ", ".join(top_features) if top_features else "Multi-feature divergence"
 
             aid = create_alert(
