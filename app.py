@@ -16,9 +16,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.database.db import init_database
 from src.database.queries import get_astronauts, get_active_alerts
-from src.components.mission_header import render_mission_header, render_crew_selector_sidebar
-from src.components.disclaimers import render_medical_disclaimer, render_sidebar_disclaimer
+from src.components.mission_header import render_mission_header
+from src.components.disclaimers import render_medical_disclaimer
 from src.components.badges import render_provenance_badge
+from src.components.sidebar import render_shared_sidebar
 
 # Page Configuration
 st.set_page_config(
@@ -35,9 +36,8 @@ init_database()
 render_mission_header("Mission Control Overview")
 render_medical_disclaimer()
 
-# Sidebar: Crew selection & persistent notice
-selected_astronaut = render_crew_selector_sidebar()
-render_sidebar_disclaimer()
+# Sidebar: Shared crew selection, time window & module integration health
+selected_astronaut, time_window = render_shared_sidebar()
 
 # Main Command Center Layout
 col_main, col_stats = st.columns([2, 1], gap="medium")
