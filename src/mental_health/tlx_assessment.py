@@ -51,8 +51,10 @@ def calculate_fatigue_risk_index(
     efficiency_component = min(15.0, (inefficiency / 30.0) * 15.0)
 
     # 4. Circadian phase drift component (absolute hours from normal schedule)
-    drift_component = min(10.0, (abs(circadian_phase_offset := circadian_drift_hours) / 2.5) * 10.0)
-
+    drift_component = min(
+    10.0,
+    (abs(circadian_drift_hours) / 2.5) * 10.0
+)
     total_risk = round(tlx_component + sleep_component + efficiency_component + drift_component, 1)
     total_risk = max(0.0, min(100.0, total_risk))
 

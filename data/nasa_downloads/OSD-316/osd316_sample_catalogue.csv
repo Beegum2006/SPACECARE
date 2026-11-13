@@ -1,0 +1,34 @@
+sample_id,source_name,subject,group,timepoint,sex,organism,material
+SRR11586291,Ctl1-T0,Control 1,Ground Control,T+0,male,Homo sapiens,Whole blood
+SRR11586279,Ctl2-T0,Control 2,Ground Control,T+0,male,Homo sapiens,Whole blood
+SRR11586264,Ctl3-T0,Control 3,Ground Control,T+0,male,Homo sapiens,Whole blood
+SRR11586262,Ctl4-T0,Control 4,Ground Control,T+0,male,Homo sapiens,Whole blood
+SRR11586290,Ctl1-T8m,Control 1,Ground Control,T+8,male,Homo sapiens,Whole blood
+SRR11586268,Ctl2-T8m,Control 2,Ground Control,T+8,male,Homo sapiens,Whole blood
+SRR11586263,Ctl3-T8m,Control 3,Ground Control,T+8,male,Homo sapiens,Whole blood
+SRR11586261,Ctl4-T8m,Control 4,Ground Control,T+8,male,Homo sapiens,Whole blood
+SRR11586260,COS1-L-25,COS 1,Space Flight,Preflight L-25,male,Homo sapiens,Whole blood
+SRR11586286,COS2-L-25,COS 2,Space Flight,Preflight L-25,male,Homo sapiens,Whole blood
+SRR11586281,COS3-L-25,COS 3,Space Flight,Preflight L-25,male,Homo sapiens,Whole blood
+SRR11586275,COS4-L-25,COS 4,Space Flight,Preflight L-25,male,Homo sapiens,Whole blood
+SRR11586270,COS5-L-25,COS 5,Space Flight,Preflight L-25,male,Homo sapiens,Whole blood
+SRR11586259,COS1-F+64,COS 1,Space Flight,Inflight L+64,male,Homo sapiens,Whole blood
+SRR11586285,COS2-F+64,COS 2,Space Flight,Inflight L+64,male,Homo sapiens,Whole blood
+SRR11586280,COS3-F+64,COS 3,Space Flight,Inflight L+64,male,Homo sapiens,Whole blood
+SRR11586269,COS5-F+64,COS 5,Space Flight,Inflight L+64,male,Homo sapiens,Whole blood
+SRR11586284,COS2-F+129,COS 2,Space Flight,Inflight L+129,male,Homo sapiens,Whole blood
+SRR11586278,COS3-F+129,COS 3,Space Flight,Inflight L+129,male,Homo sapiens,Whole blood
+SRR11586274,COS4-F+129,COS 4,Space Flight,Inflight L+129,male,Homo sapiens,Whole blood
+SRR11586289,COS1-R+1,COS 1,Space Flight,Postflight R+1,male,Homo sapiens,Whole blood
+SRR11586283,COS2-R+1,COS 2,Space Flight,Postflight R+1,male,Homo sapiens,Whole blood
+SRR11586277,COS3-R+1,COS 3,Space Flight,Postflight R+1,male,Homo sapiens,Whole blood
+SRR11586273,COS4-R+1,COS 4,Space Flight,Postflight R+1,male,Homo sapiens,Whole blood
+SRR11586267,COS5-R+1,COS 5,Space Flight,Postflight R+1,male,Homo sapiens,Whole blood
+SRR11586288,COS1-R+7,COS 1,Space Flight,Postflight R+7,male,Homo sapiens,Whole blood
+SRR11586282,COS2-R+7,COS 2,Space Flight,Postflight R+7,male,Homo sapiens,Whole blood
+SRR11586276,COS3-R+7,COS 3,Space Flight,Postflight R+7,male,Homo sapiens,Whole blood
+SRR11586272,COS4-R+7,COS 4,Space Flight,Postflight R+7,male,Homo sapiens,Whole blood
+SRR11586266,COS5-R+7,COS 5,Space Flight,Postflight R+7,male,Homo sapiens,Whole blood
+SRR11586287,COS1-R+30,COS 1,Space Flight,Postflight R+30,male,Homo sapiens,Whole blood
+SRR11586271,COS4-R+30,COS 4,Space Flight,Postflight R+30,male,Homo sapiens,Whole blood
+SRR11586265,COS5-R+30,COS 5,Space Flight,Postflight R+30,male,Homo sapiens,Whole blood

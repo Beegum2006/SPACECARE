@@ -17,6 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.nasa_data.osdr_client import (
     get_curated_human_studies, search_studies, fetch_live_study_metadata
 )
+from src.nasa_data.fastq_qc import analyze_fastq
 from src.components.mission_header import render_mission_header, render_crew_selector_sidebar
 from src.components.disclaimers import render_medical_disclaimer, render_sidebar_disclaimer
 from src.components.badges import render_provenance_badge
@@ -46,10 +47,11 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-tab_browser, tab_inspector, tab_about = st.tabs([
+tab_browser, tab_inspector, tab_about, tab_fastq = st.tabs([
     "📚 Human Spaceflight Study Explorer",
     "🔍 Live OSDR Metadata Inspector",
-    "📖 About NASA OSDR Integration"
+    "📖 About NASA OSDR Integration",
+    "🧬 Raw RNA-seq Quality Control"
 ])
 
 # ============================================================================
@@ -154,4 +156,77 @@ with tab_about:
         - **SPACECARE Integration**: All data queried here preserves original study accession codes, 
           author attributions, DOIs, and official publication findings without modification or synthetic fabrication.
         """
+    )
+# ============================================================================
+# TAB 4: NASA OSDR Raw RNA-seq Data & Quality Control
+# ============================================================================
+with tab_fastq:
+    st.markdown("#### 🧬 NASA OSDR-316 Raw RNA-seq Dataset")
+
+    st.info(
+        "Authentic NASA OSDR raw sequencing reads. "
+        "This is research data, not continuous astronaut wearable telemetry."
+    )
+
+    fastq_path = (
+        PROJECT_ROOT
+        / "data"
+        / "nasa_downloads"
+        / "OSD-316"
+        / "GLDS-316_rna-seq_SRR11586267.fastq.gz"
+    )
+
+    st.markdown(
+        "**Study:** OSD-316 – Plasticity of the human IgM repertoire "
+        "in response to a long-term spaceflight"
+    )
+    st.markdown(
+        "**Sample:** SRR11586267 | COS 5 | Postflight R+1 | Whole blood"
+    )
+    st.markdown("**Platform:** Illumina MiSeq | RNA-seq | Single-end")
+
+    if st.button("Analyze downloaded NASA FASTQ file", key="analyze_osd316_fastq"):
+        if not fastq_path.exists():
+            st.error(f"FASTQ file not found: {fastq_path}")
+        else:
+            with st.spinner("Reading NASA FASTQ and calculating QC metrics..."):
+                try:
+                    qc = analyze_fastq(fastq_path)
+
+                    st.success("FASTQ analysis completed.")
+
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Valid reads", f"{qc['total_reads']:,}")
+                    c2.metric("Total bases", f"{qc['total_bases']:,}")
+                    c3.metric("File size", f"{qc['file_size_mb']} MB")
+
+                    c4, c5, c6 = st.columns(3)
+                    c4.metric("Average read length", f"{qc['average_read_length']} bases")
+                    c5.metric("GC content", f"{qc['gc_content_pct']}%")
+                    c6.metric("Mean Phred quality", qc["mean_phred_quality"])
+
+                    c7, c8, c9 = st.columns(3)
+                    c7.metric("Q30 bases", f"{qc['q30_percentage']}%")
+                    c8.metric("Invalid records", qc["invalid_records"])
+                    c9.metric(
+                        "Read length range",
+                        f"{qc['minimum_read_length']}–{qc['maximum_read_length']}"
+                    )
+
+                    st.caption(
+                        "Q30 = fraction of bases with Phred quality score ≥30. "
+                        "Metrics calculated locally from the downloaded FASTQ "
+                        "using Phred+33 encoding."
+                    )
+
+                    with st.expander("View complete QC results"):
+                        st.json(qc)
+
+                except Exception as e:
+                    st.error(f"FASTQ analysis failed: {e}")
+
+    st.warning(
+        "Scope: This is basic FASTQ structural and base-quality QC only. "
+        "No read alignment, gene-expression quantification, IgM repertoire "
+        "analysis, or clinical interpretation has been performed."
     )

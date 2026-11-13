@@ -69,6 +69,30 @@ with tab_sleep:
 
     sleep_data = generate_sleep_history(ast_id, days=14)
     latest_sleep = sleep_data[-1]
+    sleep_data = generate_sleep_history(ast_id, days=14)
+latest_sleep = sleep_data[-1]
+
+# TEST MODE - Simulate sleep conditions
+with st.expander("🧪 Test Mode – Simulate Sleep Conditions"):
+    test_sleep_duration = st.slider(
+        "Sleep Duration (hours)",
+        3.0, 9.0, 7.0, step=0.5
+    )
+
+    test_sleep_efficiency = st.slider(
+        "Sleep Efficiency (%)",
+        50, 100, 85
+    )
+
+    test_circadian_drift = st.slider(
+        "Circadian Drift (hours)",
+        0.0, 4.0, 0.5, step=0.5
+    )
+
+    latest_sleep["sleep_duration_hours"] = test_sleep_duration
+    latest_sleep["sleep_efficiency_pct"] = test_sleep_efficiency
+    latest_sleep["circadian_drift_hours"] = test_circadian_drift
+    latest_sleep["sleep_debt_hours"] = max(0.0, 8.0 - test_sleep_duration)
 
     # Metrics Row
     m1, m2, m3, m4 = st.columns(4)

@@ -31,8 +31,7 @@ def simulate_sleep_profile(
     # Sleep stage breakdown (% of total sleep)
     rem_pct = float(np.clip(22.0 + np.random.normal(0, 2.0), 15.0, 30.0))
     deep_pct = float(np.clip(18.0 + np.random.normal(0, 2.0) - (abs(drift) * 1.5), 10.0, 25.0))
-    light_pct = float(np.clip(100.0 - rem_pct - deep_pct, 45.0, 65.0))
-
+    light_pct = 100.0 - rem_pct - deep_pct
     # Calculate sleep debt compared to 8.0 hr baseline target
     sleep_debt = max(0.0, 8.0 - actual_duration)
 
