@@ -27,6 +27,8 @@ from src.components.mission_header import render_mission_header, render_crew_sel
 from src.components.disclaimers import render_medical_disclaimer, render_sidebar_disclaimer
 from src.components.badges import render_provenance_badge
 from src.components.metrics_card import render_metric_card
+from src.ml.service import analyze_astronaut
+from src.alerts.alert_engine import evaluate_vitals_for_alerts
 
 st.set_page_config(page_title="SPACECARE | Astronaut Vitals", page_icon="🚀", layout="wide")
 
@@ -70,6 +72,57 @@ if not history:
     history = get_vitals_history(ast_id, limit=60)
 
 latest = history[-1] if history else None
+
+# 1. Run ML anomaly detection
+ml_result = analyze_astronaut(
+    astronaut=selected_astronaut,
+    history=history
+)
+
+# 2. Extract ML prediction
+ml_prediction = ml_result["prediction"]
+
+# 3. Evaluate clinical and ML alerts
+alert_ids = []
+if latest:
+    alert_ids = evaluate_vitals_for_alerts(
+        astronaut=selected_astronaut,
+        reading=latest,
+        ml_result=ml_prediction
+    )
+
+# 4. Store results for dashboard display
+st.session_state["ml_result"] = ml_result
+st.session_state["ml_prediction"] = ml_prediction
+st.session_state["generated_alert_ids"] = alert_ids
+
+# ML Anomaly Detection Results
+st.divider()
+st.markdown("### 🤖 Machine Learning Anomaly Detection")
+
+ml_col1, ml_col2, ml_col3 = st.columns(3)
+
+with ml_col1:
+    st.metric(
+        "ML Status",
+        ml_prediction.get("status", "UNKNOWN")
+    )
+
+with ml_col2:
+    st.metric(
+        "Anomaly Severity",
+        f"{ml_prediction.get('normalized_severity', 0):.3f}"
+    )
+
+with ml_col3:
+    st.metric(
+        "Alerts Generated",
+        len(alert_ids)
+    )
+
+st.write("**ML Explanation:**", ml_prediction.get("explanation", "N/A"))
+st.write("**Training Source:**", ml_result.get("training_source", "N/A"))
+st.write("**Training Samples:**", ml_result.get("training_samples", 0))
 
 # ============================================================================
 # Telemetry Controls & Anomaly Injection Bar

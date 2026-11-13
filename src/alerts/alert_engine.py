@@ -144,52 +144,30 @@ def evaluate_vitals_for_alerts(
             created_alert_ids.append(aid)
 
     # 4. Machine Learning Multivariate Anomaly Check
-    
-    # 4. Machine Learning Multivariate Anomaly Check
-    if ml_result and ml_result.get("is_anomaly") == 1:
+    if ml_result and ml_result.get("is_anomaly") == 1 and not created_alert_ids:
         raw_score = ml_result.get("raw_decision_score", -0.1)
         title = f"ML Anomaly Detected: {ast_name}"
-
         if not is_duplicate_active_alert(title, ast_id):
             proto = get_protocol("ML_MULTIVARIATE_ANOMALY")
             top_features = []
-
-            for feat, feature_data in ml_result.get(
-                "feature_contributions", {}
-            ).items():
-                if feature_data.get("deviation_severity") in (
-                    "HIGH", "MODERATE"
-                ):
-                    z_score = feature_data.get("z_score", 0.0)
+            for feat, data in ml_result.get("feature_contributions", {}).items():
+                if data.get("deviation_severity") in ("HIGH", "MODERATE"):
                     top_features.append(
-                        f"{feat} (Z: {z_score:+.2f})"
+                        f"{feat} (Z: {data['z_score']})"
                     )
-
-            feat_text = (
-                ", ".join(top_features)
-                if top_features
-                else "Multi-feature divergence"
-            )
+            feat_text = ", ".join(top_features) if top_features else "Multi-feature divergence"
 
             aid = create_alert(
                 severity="ADVISORY",
                 category="ML_ANOMALY",
-                source="ML_MODEL",
                 title=title,
-                message=(
-                    f"Isolation Forest flagged biometric pattern "
-                    f"(Score: {raw_score:.3f}). "
-                    f"Primary drivers: {feat_text}."
-                ),
-                flight_surgeon_protocol="\n".join(
-                    proto["checklists"]
-                ),
+                message=f"Isolation Forest flagged biometric pattern (Score: {raw_score:.3f}). Primary drivers: {feat_text}.",
+                flight_surgeon_protocol="\n".join(proto["checklists"]),
                 astronaut_id=ast_id,
                 metric_name="ml_score",
                 metric_value=raw_score,
                 threshold_limit=0.0
             )
-
             created_alert_ids.append(aid)
 
     return created_alert_ids

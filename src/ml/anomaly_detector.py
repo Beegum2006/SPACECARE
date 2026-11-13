@@ -11,30 +11,23 @@ IMPORTANT & DISCLAIMER:
 - It is trained strictly on wearable physiological vitals, NOT mixed with omics assays or environmental logs.
 """
 
-import os
 import joblib
 import numpy as np
-import pandas as pd
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 
+from src.ml.feature_engineering import FEATURE_NAMES, extract_feature_matrix
+from src.simulation.vitals_generator import generate_vitals_series
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MODEL_DIR = PROJECT_ROOT / "data" / "models"
 DEFAULT_MODEL_PATH = MODEL_DIR / "isolation_forest.joblib"
 
 # 7 core wearable physiological vitals
-VITAL_FEATURES = [
-    "heart_rate",
-    "blood_pressure_sys",
-    "blood_pressure_dia",
-    "spo2",
-    "core_temperature",
-    "respiration_rate",
-    "hrv_rmssd"
-]
+VITAL_FEATURES = FEATURE_NAMES
 
 DEFAULT_PHYSIOLOGICAL_BASELINES = {
     "heart_rate": 70.0,
@@ -73,83 +66,50 @@ class AstronautAnomalyDetector:
         self.feature_names = VITAL_FEATURES
         self.baseline_stats: Dict[str, Dict[str, float]] = {}
         self.training_sample_count = 0
-        self.training_source = "NOT_TRAINED"
 
     def _prepare_matrix(self, readings: List[Dict[str, Any]]) -> np.ndarray:
-        """Extracts and imputes feature vectors from telemetry dictionaries."""
-        matrix = []
-        for r in readings:
-            row = []
-            for f in self.feature_names:
-                val = r.get(f)
-                if val is None or (isinstance(val, (int, float)) and np.isnan(val)):
-                    val = np.nan
-                else:
-                    try:
-                        val = float(val)
-                    except (ValueError, TypeError):
-                        val = np.nan
-                row.append(val)
-            matrix.append(row)
+        """Extract the shared seven-feature matrix; missing values remain NaN for imputation."""
+        return extract_feature_matrix(readings)
 
-        arr = np.array(matrix, dtype=np.float64)
-        if arr.ndim == 1:
-            arr = arr.reshape(1, -1)
-        return arr
-    def _validate_training_readings(
-        self,
-        readings: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """Keep only valid nominal simulated telemetry for model training."""
-        valid_readings = []
+    def train_on_baseline(self, readings: List[Dict[str, Any]]) -> bool:
+        """Compatibility alias used by the original model.py implementation."""
+        return self.train(readings)
 
-        for reading in readings:
-            if reading.get("is_simulated") != 1:
-                continue
+    def train_with_astronaut_baseline(
+        self, astronaut: Dict[str, Any], count: int = 100
+    ) -> bool:
+        """Train from a generated nominal baseline when database history is unavailable."""
+        nominal_readings = generate_vitals_series(
+            astronaut=astronaut,
+            count=count,
+            interval_seconds=10,
+            anomaly_mode="NOMINAL",
+        )
+        return self.train(nominal_readings)
 
-            if reading.get("anomaly_flag", 0) != 0:
-                continue
-
-            values = [reading.get(feature) for feature in self.feature_names]
-
-            # Require at least one valid physiological measurement.
-            valid_count = 0
-            for value in values:
-                try:
-                    number = float(value)
-                    if np.isfinite(number):
-                        valid_count += 1
-                except (TypeError, ValueError):
-                    continue
-
-            if valid_count >= 1:
-                valid_readings.append(reading)
-
-        return valid_readings
     def train(self, training_readings: List[Dict[str, Any]]) -> bool:
-           """
-             Trains Isolation Forest only on nominal simulated astronaut vitals.
-            """
-           if not training_readings:
+        """
+        Trains the Isolation Forest pipeline on simulated astronaut vitals.
+        Handles missing values, fits StandardScaler, and records baseline statistics.
+        """
+        if not training_readings or len(training_readings) < 10:
             return False
 
-           valid_readings = self._validate_training_readings(training_readings)
-
-           if len(valid_readings) < 10:
+        X = self._prepare_matrix(training_readings)
+        if np.all(np.isnan(X), axis=0).any():
             return False
-
-           X = self._prepare_matrix(valid_readings)
 
         # Fit imputer and scaler
-           X_imputed = self.imputer.fit_transform(X)
-           X_scaled = self.scaler.fit_transform(X_imputed)
+        X_imputed = self.imputer.fit_transform(X)
+        X_scaled = self.scaler.fit_transform(X_imputed)
+
         # Fit Isolation Forest
-           self.model.fit(X_scaled)
-           self.is_trained = True
-           self.training_sample_count = len(valid_readings)
-           self.training_source = "NOMINAL_SIMULATED_TELEMETRY"
+        self.model.fit(X_scaled)
+        self.is_trained = True
+        self.training_sample_count = len(training_readings)
+
         # Store baseline distributions for explainability
-           for idx, feat in enumerate(self.feature_names):
+        for idx, feat in enumerate(self.feature_names):
             vals = X_imputed[:, idx]
             self.baseline_stats[feat] = {
                 "mean": float(np.mean(vals)),
@@ -158,7 +118,7 @@ class AstronautAnomalyDetector:
                 "max": float(np.max(vals))
             }
 
-           return True
+        return True
 
     def predict(self, reading: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -190,13 +150,12 @@ class AstronautAnomalyDetector:
         normalized_severity = float(np.clip((0.15 - raw_score) / 0.45, 0.0, 1.0))
 
         # Categorize status
-       # Categorize status
         if is_anomaly == 1:
-           status = "ANOMALOUS"
-        elif normalized_severity >= 0.50:
-           status = "SUSPICIOUS"
+            status = "ANOMALOUS"
+        elif raw_score < 0.03:
+            status = "SUSPICIOUS"
         else:
-           status = "NOMINAL"
+            status = "NOMINAL"
 
         # Compute explainable feature deviations
         contributions = {}
@@ -278,8 +237,7 @@ class AstronautAnomalyDetector:
             "model": self.model,
             "is_trained": self.is_trained,
             "baseline_stats": self.baseline_stats,
-            "training_sample_count": self.training_sample_count,
-            "training_source": self.training_source
+            "training_sample_count": self.training_sample_count
         }
         joblib.dump(payload, str(file_path))
         return file_path
@@ -306,5 +264,4 @@ class AstronautAnomalyDetector:
         instance.is_trained = payload.get("is_trained", False)
         instance.baseline_stats = payload.get("baseline_stats", {})
         instance.training_sample_count = payload.get("training_sample_count", 0)
-        instance.training_source = payload.get("training_source", "UNKNOWN")
         return instance
