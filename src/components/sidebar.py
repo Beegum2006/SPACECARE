@@ -161,6 +161,51 @@ def render_shared_sidebar() -> Tuple[Dict[str, Any], int]:
         st.cache_data.clear()
         st.rerun()
 
+    # 🧪 Flight Surgeon Mission Scenario / Fault Injection
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("🧪 Mission Scenario / Fault Injection", expanded=False):
+        scenario_options = [
+            "Nominal Mission (Default)",
+            "Solar Particle Event (SPE Radiation Spike)",
+            "ECLSS Scrubber Fault (High Cabin CO2)",
+            "Cardiorespiratory Anomaly (Tachycardia + Hypoxia)",
+            "Acute Circadian Desync & Crew Fatigue"
+        ]
+        if "active_scenario" not in st.session_state:
+            st.session_state["active_scenario"] = "Nominal Mission (Default)"
+
+        curr_scen_idx = 0
+        if st.session_state["active_scenario"] in scenario_options:
+            curr_scen_idx = scenario_options.index(st.session_state["active_scenario"])
+
+        active_scen = st.selectbox(
+            "Active Flight Scenario:",
+            scenario_options,
+            index=curr_scen_idx,
+            key="shared_sidebar_scenario_select"
+        )
+        st.session_state["active_scenario"] = active_scen
+
+        # Scenario description and status tag
+        scenario_meta = {
+            "Nominal Mission (Default)": ("🟢 NOMINAL", "#10b981", "Standard baseline orbital physiology & ECLSS specs."),
+            "Solar Particle Event (SPE Radiation Spike)": ("🔴 CRITICAL", "#ef4444", "SPE surge >15 mSv/day, SAA passage, active storm alarm."),
+            "ECLSS Scrubber Fault (High Cabin CO2)": ("🔴 CRITICAL", "#ef4444", "CO2 > 5.2 mmHg hypercapnia hazard, CDRA scrubber fault."),
+            "Cardiorespiratory Anomaly (Tachycardia + Hypoxia)": ("🔴 CRITICAL", "#ef4444", "Tachycardia (HR > 135 bpm) & Hypoxia (SpO2 < 91%)."),
+            "Acute Circadian Desync & Crew Fatigue": ("🟡 WARNING", "#f59e0b", "Severe sleep debt (<4.5h), high fatigue score & phase drift.")
+        }
+        tag, tag_color, desc = scenario_meta.get(active_scen, ("INFO", "#38bdf8", ""))
+        st.markdown(
+            f"""
+            <div style="background: rgba(15, 23, 42, 0.85); border-left: 3px solid {tag_color};
+                        border-radius: 4px; padding: 6px 10px; margin-top: 6px; font-size: 0.75rem;">
+                <span style="color: {tag_color}; font-weight: 700;">{tag}</span><br>
+                <span style="color: #cbd5e1;">{desc}</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
     # Module integration health panel
     _render_integration_status_sidebar()
 

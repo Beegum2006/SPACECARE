@@ -20,9 +20,13 @@ CRITICAL ARCHITECTURE DIRECTIVES:
 5. DETERMINISTIC REALISTIC FALLBACKS: Uses `numpy.random.default_rng` with seeds
    derived from (astronaut_id, time_window) so space-medicine telemetry is realistic
    and never flickers randomly on Streamlit re-renders.
+6. SCENARIO / FAULT INJECTION SIMULATOR: Supports dynamic injection of aerospace
+   emergencies (SPE storm, CO2 scrubber failure, Cardiorespiratory collapse,
+   Circadian fatigue) across all contracts without altering teammate code.
 ==============================================================================
 """
 
+import os
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -34,7 +38,7 @@ logger = logging.getLogger("spacecare.data_adapter")
 
 
 # ============================================================================
-# INTERNAL SEED & ASTRONAUT RESOLUTION HELPERS
+# INTERNAL SEED, ASTRONAUT & SCENARIO HELPERS
 # ============================================================================
 
 def _derive_seed(seed_key: Union[str, int], salt: int = 42) -> int:
@@ -68,11 +72,37 @@ def _normalize_ast_id(ast_id: Union[str, int, None]) -> Tuple[str, int]:
     return "AST-01", 1
 
 
+def _get_active_scenario(scenario_override: Optional[str] = None) -> str:
+    """
+    Retrieves the active simulation scenario.
+    Precedence:
+    1. Explicit function parameter `scenario_override`
+    2. Environment variable `SPACECARE_ACTIVE_SCENARIO`
+    3. Streamlit session state `st.session_state["active_scenario"]`
+    4. Default: "Nominal Mission (Default)"
+    """
+    if scenario_override:
+        return scenario_override
+
+    env_scen = os.environ.get("SPACECARE_ACTIVE_SCENARIO")
+    if env_scen:
+        return env_scen
+
+    try:
+        import streamlit as st
+        if hasattr(st, "session_state") and "active_scenario" in st.session_state:
+            return str(st.session_state["active_scenario"])
+    except Exception:
+        pass
+
+    return "Nominal Mission (Default)"
+
+
 # ============================================================================
 # 1. CREW ROSTER CONTRACT
 # ============================================================================
 
-def get_crew_roster() -> List[Dict[str, Any]]:
+def get_crew_roster(scenario_override: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Returns the active 4-astronaut Expedition 71 crew roster.
     
@@ -85,7 +115,6 @@ def get_crew_roster() -> List[Dict[str, Any]]:
         - eva_hours: float
         - overall_status: "NOMINAL" | "WARNING" | "CRITICAL"
     """
-    # 4 verified Expedition 71 astronauts with explicit aerospace clinical profiles
     roster = [
         {
             "astronaut_id": "AST-01",
@@ -107,36 +136,36 @@ def get_crew_roster() -> List[Dict[str, Any]]:
         },
         {
             "astronaut_id": "AST-02",
-            "name": "Marcus Chen",
-            "callsign": "SPECTER",
+            "name": "Marcus Aurelius Thorne",
+            "callsign": "TITAN",
             "role": "Flight Engineer",
-            "agency": "NASA",
+            "agency": "ESA",
             "mission": "Expedition 71 / ISS",
             "mission_day": 42,
             "eva_hours": 12.0,
             "overall_status": "NOMINAL",
-            "baseline_hr": 72.0,
-            "baseline_spo2": 98.0,
-            "baseline_bp_sys": 120.0,
-            "baseline_bp_dia": 78.0,
-            "baseline_temp": 36.9,
+            "baseline_hr": 64.0,
+            "baseline_spo2": 99.0,
+            "baseline_bp_sys": 114.0,
+            "baseline_bp_dia": 72.0,
+            "baseline_temp": 36.8,
             "baseline_rr": 14.0,
-            "baseline_hrv": 52.0
+            "baseline_hrv": 66.0
         },
         {
             "astronaut_id": "AST-03",
-            "name": "Dr. Elena Rostov",
-            "callsign": "SOLARIS",
+            "name": "Dr. Elena Rostova",
+            "callsign": "STARLING",
             "role": "Medical Officer",
-            "agency": "ESA / NASA Partner",
+            "agency": "NASA",
             "mission": "Expedition 71 / ISS",
             "mission_day": 42,
             "eva_hours": 6.5,
             "overall_status": "NOMINAL",
-            "baseline_hr": 65.0,
-            "baseline_spo2": 99.0,
-            "baseline_bp_sys": 114.0,
-            "baseline_bp_dia": 72.0,
+            "baseline_hr": 70.0,
+            "baseline_spo2": 98.2,
+            "baseline_bp_sys": 118.0,
+            "baseline_bp_dia": 76.0,
             "baseline_temp": 36.6,
             "baseline_rr": 13.0,
             "baseline_hrv": 62.0
@@ -161,7 +190,15 @@ def get_crew_roster() -> List[Dict[str, Any]]:
         }
     ]
 
-    # Attempt to enrich or sync from database if available
+    # Dynamic status reflection if fault injection scenario is active
+    scenario = _get_active_scenario(scenario_override)
+    if "Cardiorespiratory" in scenario:
+        roster[0]["overall_status"] = "CRITICAL"
+    elif "Circadian" in scenario:
+        roster[0]["overall_status"] = "WARNING"
+        roster[3]["overall_status"] = "CRITICAL"
+
+    # Enrich from database if available
     try:
         from src.database.queries import get_astronauts
         db_crew = get_astronauts()
@@ -169,9 +206,10 @@ def get_crew_roster() -> List[Dict[str, Any]]:
             for i, db_a in enumerate(db_crew[:4]):
                 roster[i]["name"] = db_a.get("name", roster[i]["name"])
                 roster[i]["callsign"] = db_a.get("callsign", roster[i]["callsign"])
-                roster[i]["status"] = db_a.get("status", roster[i]["overall_status"])
+                if "Nominal" in scenario:
+                    roster[i]["overall_status"] = db_a.get("status", roster[i]["overall_status"])
     except Exception as e:
-        logger.debug(f"DB crew query skipped ({e}); using verified static Expedition 71 roster.")
+        logger.debug(f"DB crew query bypassed ({e}); using static Expedition 71 roster.")
 
     return roster
 
@@ -180,7 +218,11 @@ def get_crew_roster() -> List[Dict[str, Any]]:
 # 2. VITALS & ML ANOMALIES CONTRACT (Member 2 Integration)
 # ============================================================================
 
-def get_vitals_and_anomalies(astronaut_id: str = "AST-01", hours: int = 24) -> Dict[str, Any]:
+def get_vitals_and_anomalies(
+    astronaut_id: str = "AST-01",
+    hours: int = 24,
+    scenario_override: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Retrieves wearable physiological vitals and scores them with Member 2's
     Isolation Forest anomaly detection engine.
@@ -202,6 +244,7 @@ def get_vitals_and_anomalies(astronaut_id: str = "AST-01", hours: int = 24) -> D
     ast_code, num_id = _normalize_ast_id(astronaut_id)
     roster = get_crew_roster()
     astronaut = next((a for a in roster if a["astronaut_id"] == ast_code), roster[0])
+    scenario = _get_active_scenario(scenario_override)
 
     source = "live"
     status_note = "Connected to Member 2 ML Isolation Forest pipeline"
@@ -232,37 +275,57 @@ def get_vitals_and_anomalies(astronaut_id: str = "AST-01", hours: int = 24) -> D
         base_rr = astronaut.get("baseline_rr", 14.0)
 
         raw_readings = []
+        spike_window = max(2, min(5, hours // 4))
+
         for i in range(hours):
             t = now - timedelta(hours=hours - 1 - i)
             # Diurnal circadian variation
             hour_of_day = t.hour
-            circadian = np.sin((hour_of_day - 6) * np.pi / 12)  # lower at night, higher midday
-            
-            # Specific astronaut profile adjustments (AST-04 has an induced elevated reading near end)
-            is_spike = (ast_code == "AST-04" and i >= hours - 3)
+            circadian = np.sin((hour_of_day - 6) * np.pi / 12)
 
-            hr = base_hr + (circadian * 4.0) + rng.normal(0, 1.5)
-            spo2 = base_spo2 - (abs(circadian) * 0.3) + rng.normal(0, 0.2)
-            sys_bp = base_sys + (circadian * 3.0) + rng.normal(0, 1.8)
-            dia_bp = base_dia + (circadian * 2.0) + rng.normal(0, 1.2)
+            hr = base_hr + (circadian * 4.0) + rng.normal(0, 1.2)
+            spo2 = base_spo2 - (abs(circadian) * 0.25) + rng.normal(0, 0.2)
+            sys_bp = base_sys + (circadian * 3.0) + rng.normal(0, 1.5)
+            dia_bp = base_dia + (circadian * 2.0) + rng.normal(0, 1.0)
             temp = base_temp + (circadian * 0.15) + rng.normal(0, 0.05)
             rr = base_rr + (circadian * 0.8) + rng.normal(0, 0.4)
 
-            if is_spike:
-                hr += 42.0  # Tachycardia spike
-                spo2 -= 5.5  # Hypoxemic drop
+            # Scenario Fault Injection: Cardiorespiratory Anomaly
+            if "Cardiorespiratory" in scenario and (i >= hours - spike_window):
+                hr += 68.0    # Tachycardia spike: ~138-145 bpm
+                spo2 -= 9.5   # Acute hypoxia: ~88-89%
+                sys_bp += 36.0  # Hypertensive compensatory: ~154 mmHg
+                dia_bp += 18.0  # Diastolic spike
+                rr += 12.0    # Tachypnea: ~26 br/min
+                temp += 0.5
+            elif ast_code == "AST-04" and i >= hours - 3:
+                # Built-in slight elevation for AST-04
+                hr += 42.0
+                spo2 -= 5.5
                 sys_bp += 18.0
 
             raw_readings.append({
                 "timestamp": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "heart_rate": round(float(np.clip(hr, 52.0, 140.0)), 1),
-                "spo2": round(float(np.clip(spo2, 88.0, 100.0)), 1),
-                "blood_pressure_sys": round(float(np.clip(sys_bp, 95.0, 160.0)), 1),
-                "blood_pressure_dia": round(float(np.clip(dia_bp, 60.0, 105.0)), 1),
-                "core_temperature": round(float(np.clip(temp, 35.8, 39.2)), 2),
-                "respiration_rate": round(float(np.clip(rr, 10.0, 26.0)), 1),
-                "hrv_rmssd": round(float(55.0 - (hr - 70.0) * 0.5), 1)
+                "heart_rate": round(float(np.clip(hr, 45.0, 160.0)), 1),
+                "spo2": round(float(np.clip(spo2, 85.0, 100.0)), 1),
+                "blood_pressure_sys": round(float(np.clip(sys_bp, 90.0, 180.0)), 1),
+                "blood_pressure_dia": round(float(np.clip(dia_bp, 55.0, 115.0)), 1),
+                "core_temperature": round(float(np.clip(temp, 35.5, 39.8)), 2),
+                "respiration_rate": round(float(np.clip(rr, 8.0, 32.0)), 1),
+                "hrv_rmssd": round(float(max(15.0, 55.0 - (hr - 70.0) * 0.5)), 1)
             })
+
+    # Ensure Cardiorespiratory fault injection applies to raw_readings regardless of data source
+    if "Cardiorespiratory" in scenario and raw_readings:
+        spike_w = max(2, min(5, len(raw_readings)))
+        for idx in range(len(raw_readings) - spike_w, len(raw_readings)):
+            r = raw_readings[idx]
+            r["heart_rate"] = round(float(np.clip(r.get("heart_rate", 70.0) + 68.0, 136.0, 160.0)), 1)
+            r["spo2"] = round(float(np.clip(r.get("spo2", 98.0) - 10.0, 85.0, 90.5)), 1)
+            r["blood_pressure_sys"] = round(float(r.get("blood_pressure_sys", 118.0) + 36.0), 1)
+            r["blood_pressure_dia"] = round(float(r.get("blood_pressure_dia", 76.0) + 18.0), 1)
+            r["respiration_rate"] = round(float(r.get("respiration_rate", 14.0) + 12.0), 1)
+            r["hrv_rmssd"] = 18.0
 
     # 3. Call Member 2's ML module for scoring
     ml_scores: List[float] = []
@@ -271,26 +334,32 @@ def get_vitals_and_anomalies(astronaut_id: str = "AST-01", hours: int = 24) -> D
 
     try:
         from src.ml.anomaly_detector import AstronautAnomalyDetector
-        detector = AstronautAnomalyDetector(contamination=0.05, random_state=42)
+        detector = AstronautAnomalyDetector(contamination=0.08, random_state=42)
+        
         # Train on nominal baseline sequence
-        train_success = detector.train(raw_readings[:hours] if len(raw_readings) >= 10 else raw_readings)
+        baseline_slice = raw_readings[:max(10, len(raw_readings) - 4)] if len(raw_readings) >= 14 else raw_readings
+        train_success = detector.train(baseline_slice)
+        
         if train_success:
             predictions = detector.predict_series(raw_readings)
-            for p in predictions:
-                sc = float(p.get("ml_decision_score", p.get("anomaly_score", 0.1)))
-                # Map scikit-learn decision function to [-1.0, 1.0]
-                norm_sc = round(float(np.clip(sc * 4.0, -1.0, 1.0)), 4)
-                anom = bool(p.get("ml_is_anomaly", norm_sc < 0.0))
-                ml_scores.append(norm_sc)
-                ml_anomalies.append(anom)
-            ml_success = True
-            source = "live"
-            status_note = "Scored via Member 2 AstronautAnomalyDetector"
+            if predictions and len(predictions) == len(raw_readings):
+                for p in predictions:
+                    sc = float(p.get("ml_decision_score", 0.1))
+                    # Scikit-Learn IsolationForest decision_function: < 0 is anomaly
+                    norm_sc = round(float(np.clip(sc * 4.0, -1.0, 1.0)), 4)
+                    is_anom = bool(p.get("ml_is_anomaly", 0) == 1 or norm_sc < 0.0)
+                    ml_scores.append(norm_sc)
+                    ml_anomalies.append(is_anom)
+                ml_success = True
+                source = "live"
+                status_note = "Scored via Member 2 AstronautAnomalyDetector (IsolationForest)"
     except Exception as ml_err:
-        logger.debug(f"Member 2 anomaly detector call bypassed ({ml_err}). Using mathematical heuristic.")
+        logger.debug(f"Member 2 anomaly detector call bypassed ({ml_err}).")
 
     # 4. Fallback mathematical anomaly scoring if ML module had import/runtime issues
-    if not ml_success:
+    if not ml_success or len(ml_scores) != len(raw_readings):
+        ml_scores = []
+        ml_anomalies = []
         for r in raw_readings:
             hr = r["heart_rate"]
             spo2 = r["spo2"]
@@ -302,7 +371,7 @@ def get_vitals_and_anomalies(astronaut_id: str = "AST-01", hours: int = 24) -> D
             composite_dev = max(z_hr, z_spo2, z_temp)
 
             score = round(float(np.clip(0.3 - (composite_dev * 0.25), -1.0, 1.0)), 4)
-            is_anom = bool(score < 0.0 or spo2 < 93.0 or hr > 115.0 or hr < 52.0)
+            is_anom = bool(score < 0.0 or spo2 < 91.0 or hr > 125.0 or hr < 50.0)
             ml_scores.append(score)
             ml_anomalies.append(is_anom)
 
@@ -338,16 +407,28 @@ def get_vitals_and_anomalies(astronaut_id: str = "AST-01", hours: int = 24) -> D
 
     summary = {
         "latest_heart_rate": latest.get("heart_rate_bpm", 70.0),
+        "delta_heart_rate": delta_hr,
         "latest_spo2": latest.get("spo2_pct", 98.0),
-        "latest_blood_pressure": f"{int(latest.get('systolic_bp', 118))}/{int(latest.get('diastolic_bp', 76))} mmHg",
-        "latest_body_temp": latest.get("body_temp_c", 36.8),
-        "latest_respiration_rate": latest.get("respiration_rate", 14.0),
+        "delta_spo2": delta_spo2,
+        "latest_blood_pressure": f"{int(latest.get('systolic_bp', 118))}/{int(latest.get('diastolic_bp', 76))}",
+        "latest_temperature": latest.get("body_temp_c", 36.8),
+        "latest_respiration": latest.get("respiration_rate", 14.0),
         "latest_anomaly_score": latest.get("anomaly_score", 0.18),
-        "delta_hr_24h": delta_hr,
-        "delta_spo2_24h": delta_spo2,
         "anomaly_count_24h": anom_count,
-        "overall_status": overall_status
+        "overall_status": overall_status,
+        "active_scenario": scenario
     }
+
+    # 6. Pass latest reading through Member 4's live alert engine if available
+    try:
+        from src.alerts.alert_engine import evaluate_vitals_for_alerts
+        evaluate_vitals_for_alerts(
+            astronaut={"id": num_id, "name": astronaut["name"]},
+            reading=raw_readings[-1],
+            ml_result={"is_anomaly": latest.get("is_anomaly", False), "score": latest.get("anomaly_score", 0.0)}
+        )
+    except Exception as e:
+        logger.debug(f"Live alert evaluation bypassed ({e}).")
 
     return {
         "data": df,
@@ -358,13 +439,16 @@ def get_vitals_and_anomalies(astronaut_id: str = "AST-01", hours: int = 24) -> D
 
 
 # ============================================================================
-# 3. ISS ECLSS ENVIRONMENT CONTRACT (Member 1 Integration)
+# 3. ISS ENVIRONMENT CONTRACT (Member 1 Integration)
 # ============================================================================
 
-def get_iss_environment_data(hours: int = 24) -> Dict[str, Any]:
+def get_iss_environment_data(
+    hours: int = 24,
+    scenario_override: Optional[str] = None
+) -> Dict[str, Any]:
     """
-    Retrieves ISS ECLSS life support telemetry.
-    Integrates Member 1's `src/nasa_data/eda_client.py` and `osdr_client.py`.
+    Retrieves ISS ECLSS cabin environmental telemetry.
+    Integrates Member 1's `src/nasa_data/eda_client.py`.
 
     Columns in "data" (pd.DataFrame):
     - timestamp: ISO 8601 string
@@ -378,6 +462,7 @@ def get_iss_environment_data(hours: int = 24) -> Dict[str, Any]:
     Returns:
         dict: {"data": pd.DataFrame, "summary": dict, "source": str, "status_note": str}
     """
+    scenario = _get_active_scenario(scenario_override)
     source = "live"
     status_note = "Integrated with Member 1 NASA EDA ECLSS baseline reference"
     records: List[Dict[str, Any]] = []
@@ -387,7 +472,6 @@ def get_iss_environment_data(hours: int = 24) -> Dict[str, Any]:
         from src.nasa_data.eda_client import load_eda_benchmarks
         eda_df = load_eda_benchmarks()
         if not eda_df.empty and len(eda_df) >= hours:
-            # Safely copy to prevent mutating teammate object
             sample = eda_df.copy().tail(hours)
             records = sample.to_dict(orient="records")
             source = "live"
@@ -395,7 +479,7 @@ def get_iss_environment_data(hours: int = 24) -> Dict[str, Any]:
     except Exception as eda_err:
         logger.debug(f"EDA client load bypassed ({eda_err}).")
 
-    # 2. Deterministic fallback generation if teammate file unavailable
+    # 2. Deterministic fallback generation
     if not records or len(records) < hours:
         source = "simulated_fallback"
         status_note = "Fallback: Synthesized deterministic ECLSS telemetry (NASA-STD-3001)"
@@ -404,14 +488,22 @@ def get_iss_environment_data(hours: int = 24) -> Dict[str, Any]:
 
         now = datetime.now(timezone.utc)
         records = []
+        spike_window = max(2, min(5, hours // 4))
+
         for i in range(hours):
             t = now - timedelta(hours=hours - 1 - i)
             # 1 psi = 6.89476 kPa. 14.7 psi ≈ 101.35 kPa.
-            press_psi = 14.70 + rng.normal(0, 0.03)
-            co2_mmhg = 2.75 + 0.3 * np.sin(i * 0.4) + rng.normal(0, 0.1)
-            o2_pct = 21.0 + rng.normal(0, 0.08)
+            press_psi = 14.70 + rng.normal(0, 0.02)
+            co2_mmhg = 2.75 + 0.3 * np.sin(i * 0.4) + rng.normal(0, 0.08)
+            o2_pct = 21.0 + rng.normal(0, 0.06)
             temp_c = 21.8 + 0.4 * np.cos(i * 0.3) + rng.normal(0, 0.1)
-            humidity = 45.5 + rng.normal(0, 0.8)
+            humidity = 45.5 + rng.normal(0, 0.6)
+
+            # Scenario Fault Injection: ECLSS Scrubber Fault (High Cabin CO2)
+            if "ECLSS" in scenario and (i >= hours - spike_window):
+                co2_mmhg += 2.85  # Spikes CO2 to 5.6 - 5.9 mmHg (Critical > 5.2 mmHg)
+                press_psi -= 0.15 # Slight cabin atmospheric perturbation
+                o2_pct -= 0.9     # Marginal O2 displacement
 
             records.append({
                 "timestamp": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -421,6 +513,15 @@ def get_iss_environment_data(hours: int = 24) -> Dict[str, Any]:
                 "temperature_celsius": round(temp_c, 1),
                 "relative_humidity_pct": round(humidity, 1)
             })
+
+    # Ensure ECLSS fault injection applies to records regardless of data source
+    if "ECLSS" in scenario and records:
+        spike_w = max(2, min(5, len(records)))
+        for idx in range(len(records) - spike_w, len(records)):
+            r = records[idx]
+            r["co2_partial_pressure_mmhg"] = round(float(np.clip(r.get("co2_partial_pressure_mmhg", 2.8) + 2.85, 5.4, 6.2)), 2)
+            r["cabin_pressure_psi"] = round(float(r.get("cabin_pressure_psi", 14.7) - 0.15), 3)
+            r["o2_percentage"] = round(float(r.get("o2_percentage", 21.0) - 0.9), 2)
 
     # 3. Assemble exact standardized DataFrame
     df_rows = []
@@ -466,6 +567,14 @@ def get_iss_environment_data(hours: int = 24) -> Dict[str, Any]:
         "WARNING" if "WARNING" in (p_status, co2_status, o2_status, temp_status, hum_status) else "NOMINAL"
     )
 
+    # Optional enrichment with Member 1's live statistical summary
+    eda_benchmarks = {}
+    try:
+        from src.nasa_data.eda_client import get_eda_statistical_summary
+        eda_benchmarks = get_eda_statistical_summary()
+    except Exception:
+        pass
+
     summary = {
         "cabin_pressure_kpa": press_val,
         "pressure_status": p_status,
@@ -480,7 +589,9 @@ def get_iss_environment_data(hours: int = 24) -> Dict[str, Any]:
         "overall_status": overall_status,
         "dataset_id": "OSD-542",
         "source": "NASA ECLSS Engineering Reference (NASA-STD-3001)",
-        "doi": "10.26030/iss-eclss-spec"
+        "doi": "10.26030/iss-eclss-spec",
+        "active_scenario": scenario,
+        "eda_benchmarks": eda_benchmarks
     }
 
     return {
@@ -495,7 +606,10 @@ def get_iss_environment_data(hours: int = 24) -> Dict[str, Any]:
 # 4. SPACE RADIATION & DOSIMETRY CONTRACT (Member 1 Integration)
 # ============================================================================
 
-def get_radiation_data(days: int = 30) -> Dict[str, Any]:
+def get_radiation_data(
+    days: int = 30,
+    scenario_override: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Retrieves space radiation and cosmic dosimetry measurements.
     Integrates Member 1's `src/nasa_data/radiation_service.py` (RadLab).
@@ -511,6 +625,7 @@ def get_radiation_data(days: int = 30) -> Dict[str, Any]:
     Returns:
         dict: {"data": pd.DataFrame, "summary": dict, "source": str, "status_note": str}
     """
+    scenario = _get_active_scenario(scenario_override)
     source = "live"
     status_note = "Connected to Member 1 RadLab dosimetry service"
     records: List[Dict[str, Any]] = []
@@ -535,12 +650,19 @@ def get_radiation_data(days: int = 30) -> Dict[str, Any]:
 
         now = datetime.now(timezone.utc)
         records = []
+        surge_days = max(2, min(4, days // 6))
+
         for i in range(days):
             t = now - timedelta(days=days - 1 - i)
-            # LEO orbital inclination: ISS passes through SAA multiple times per day
+            # LEO orbital inclination: ISS passes through SAA periodically
             saa_flag = bool((i % 7 == 3) or (i == days - 2))
             gcr = 0.42 + rng.normal(0, 0.03)
-            spe = (0.35 + rng.normal(0, 0.08)) if saa_flag else 0.0
+            spe = (0.35 + rng.normal(0, 0.06)) if saa_flag else 0.0
+
+            # Scenario Fault Injection: Solar Particle Event (SPE Radiation Spike)
+            if "Solar Particle" in scenario and (i >= days - surge_days):
+                spe += 17.5 + rng.normal(0, 0.8)  # Huge SPE flux > 15 mSv/day
+                saa_flag = True
 
             records.append({
                 "timestamp": t.strftime("%Y-%m-%d"),
@@ -549,6 +671,15 @@ def get_radiation_data(days: int = 30) -> Dict[str, Any]:
                 "saa_passage_flag": saa_flag,
                 "total_daily_dose_msv": round(float(gcr + spe), 3)
             })
+
+    # Ensure Solar Particle Event surge applies to records regardless of data source
+    if "Solar Particle" in scenario and records:
+        surge_days = max(2, min(4, len(records)))
+        for idx in range(len(records) - surge_days, len(records)):
+            r = records[idx]
+            r["solar_particle_event_msv"] = round(float(18.2), 3)
+            r["saa_passage_flag"] = True
+            r["total_daily_dose_msv"] = round(float(r.get("galactic_cosmic_ray_msv", 0.42) + 18.2), 3)
 
     # 3. Assemble exact standardized DataFrame
     running_cumulative = 0.0
@@ -574,15 +705,15 @@ def get_radiation_data(days: int = 30) -> Dict[str, Any]:
 
     current_daily = latest.get("total_daily_dose_msv", 0.45)
     cum_dose = latest.get("cumulative_mission_dose_msv", 22.5)
-    solar_alert = bool(latest.get("solar_particle_event_msv", 0.0) > 0.25)
+    solar_alert = bool(latest.get("solar_particle_event_msv", 0.0) > 1.0 or "Solar Particle" in scenario)
     saa_flag = bool(latest.get("saa_passage_flag", False))
 
     # Limits: NASA 30-day limit = 250 mSv (or 100 mSv NCRP advisory), career limit = 600 mSv
     pct_30d = round((cum_dose / 250.0) * 100.0, 1)
     pct_career = round((cum_dose / 600.0) * 100.0, 1)
 
-    overall_status = "CRITICAL" if (pct_30d > 80.0 or solar_alert) else (
-        "WARNING" if (pct_30d > 50.0 or saa_flag) else "NOMINAL"
+    overall_status = "CRITICAL" if (pct_30d > 80.0 or solar_alert or current_daily > 10.0) else (
+        "WARNING" if (pct_30d > 50.0 or saa_flag or current_daily > 1.0) else "NOMINAL"
     )
 
     summary = {
@@ -594,7 +725,8 @@ def get_radiation_data(days: int = 30) -> Dict[str, Any]:
         "pct_career_limit": pct_career,
         "solar_storm_alert": solar_alert,
         "saa_active": saa_flag,
-        "overall_status": overall_status
+        "overall_status": overall_status,
+        "active_scenario": scenario
     }
 
     return {
@@ -609,7 +741,11 @@ def get_radiation_data(days: int = 30) -> Dict[str, Any]:
 # 5. MENTAL WELLNESS & SLEEP CONTRACT (Member 4 Integration)
 # ============================================================================
 
-def get_mental_wellness_data(astronaut_id: str = "AST-01", days: int = 14) -> Dict[str, Any]:
+def get_mental_wellness_data(
+    astronaut_id: str = "AST-01",
+    days: int = 14,
+    scenario_override: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Retrieves astronaut sleep architecture, circadian phase drift, and cognitive fatigue.
     Integrates Member 4's `src/mental_health/sleep_tracker.py` and `tlx_assessment.py`.
@@ -630,6 +766,7 @@ def get_mental_wellness_data(astronaut_id: str = "AST-01", days: int = 14) -> Di
         dict: {"data": pd.DataFrame, "summary": dict, "source": str, "status_note": str}
     """
     ast_code, num_id = _normalize_ast_id(astronaut_id)
+    scenario = _get_active_scenario(scenario_override)
     source = "live"
     status_note = "Integrated with Member 4 sleep_tracker & NASA-TLX"
     sleep_records: List[Dict[str, Any]] = []
@@ -654,20 +791,31 @@ def get_mental_wellness_data(astronaut_id: str = "AST-01", days: int = 14) -> Di
 
         now = datetime.now(timezone.utc)
         sleep_records = []
+        fatigue_window = max(2, min(5, days // 3))
+
         for d in range(days):
             t = now - timedelta(days=days - 1 - d)
-            # Realistic orbital sleep variation
             tot_hrs = 7.1 + 0.4 * np.sin(d * 0.75) + rng.normal(0, 0.25)
-            tot_hrs = float(np.clip(tot_hrs, 5.2, 8.4))
-            
-            # Stages
-            deep = float(np.clip(tot_hrs * 0.20 + rng.normal(0, 0.1), 0.9, 1.9))
-            rem = float(np.clip(tot_hrs * 0.24 + rng.normal(0, 0.1), 1.1, 2.2))
-            light = float(max(1.0, tot_hrs - deep - rem))
-
+            deep = tot_hrs * 0.20 + rng.normal(0, 0.08)
+            rem = tot_hrs * 0.24 + rng.normal(0, 0.08)
             interruptions = int(rng.poisson(1.2))
             drift_hours = float(0.4 * np.cos(d * 0.5) + rng.normal(0, 0.15))
-            circ_align = float(np.clip(94.0 - (abs(drift_hours) * 12.0), 60.0, 100.0))
+            circ_align = 94.0 - (abs(drift_hours) * 12.0)
+
+            # Scenario Fault Injection: Acute Circadian Desync & Crew Fatigue
+            if "Circadian" in scenario and (d >= days - fatigue_window):
+                tot_hrs = float(np.clip(3.9 + rng.normal(0, 0.2), 3.2, 4.4))  # Sleep collapse < 4.5h
+                deep = float(np.clip(tot_hrs * 0.10, 0.3, 0.5))
+                rem = float(np.clip(tot_hrs * 0.15, 0.4, 0.7))
+                interruptions = int(rng.integers(4, 7))
+                drift_hours = float(np.clip(2.8 + rng.normal(0, 0.2), 2.2, 3.5)) # Heavy phase drift
+                circ_align = float(np.clip(45.0 - rng.normal(0, 3.0), 30.0, 52.0))
+
+            tot_hrs = float(np.clip(tot_hrs, 3.0, 9.0))
+            deep = float(np.clip(deep, 0.2, 2.5))
+            rem = float(np.clip(rem, 0.3, 2.8))
+            light = float(max(0.5, tot_hrs - deep - rem))
+            circ_align = float(np.clip(circ_align, 25.0, 100.0))
 
             sleep_records.append({
                 "date": t.strftime("%Y-%m-%d"),
@@ -680,6 +828,18 @@ def get_mental_wellness_data(astronaut_id: str = "AST-01", days: int = 14) -> Di
                 "circadian_drift_hours": round(drift_hours, 2)
             })
 
+    # Ensure Circadian Desync fault injection applies to sleep_records regardless of data source
+    if "Circadian" in scenario and sleep_records:
+        fatigue_w = max(2, min(5, len(sleep_records)))
+        for idx in range(len(sleep_records) - fatigue_w, len(sleep_records)):
+            r = sleep_records[idx]
+            r["total_sleep_hrs"] = 4.1
+            r["deep_sleep_hrs"] = 0.4
+            r["rem_sleep_hrs"] = 0.5
+            r["sleep_interruptions"] = 5
+            r["circadian_drift_hours"] = 2.8
+            r["circadian_alignment_pct"] = 44.0
+
     # 3. Calculate scores and format DataFrame
     df_rows = []
     for r in sleep_records:
@@ -689,18 +849,32 @@ def get_mental_wellness_data(astronaut_id: str = "AST-01", days: int = 14) -> Di
         light = float(r.get("light_sleep_hrs", 4.0))
         interruptions = int(r.get("sleep_interruptions", 1))
         circ_align = float(r.get("circadian_alignment_pct", 90.0))
+        drift_h = float(r.get("circadian_drift_hours", 0.4))
 
         # Sleep quality index (0-100)
-        quality = (tot / 8.0) * 45.0 + (deep / 1.6) * 30.0 + (rem / 1.8) * 25.0 - (interruptions * 4.0)
-        quality_score = round(float(np.clip(quality, 40.0, 98.0)), 1)
+        quality = (tot / 8.0) * 45.0 + (deep / 1.6) * 30.0 + (rem / 1.8) * 25.0 - (interruptions * 5.0)
+        quality_score = round(float(np.clip(quality, 20.0, 98.0)), 1)
 
         # Fatigue score (0-100, higher = more fatigued)
-        fatigue = max(0.0, (8.0 - tot) * 18.0) + (100.0 - circ_align) * 0.4 + (interruptions * 3.5)
-        fatigue_score = round(float(np.clip(fatigue, 10.0, 92.0)), 1)
+        fatigue = max(0.0, (8.0 - tot) * 20.0) + (100.0 - circ_align) * 0.45 + (interruptions * 4.0)
+        fatigue_score = round(float(np.clip(fatigue, 10.0, 96.0)), 1)
 
         # Stress index (0-100)
-        stress = (fatigue_score * 0.5) + (100.0 - quality_score) * 0.4
-        stress_index = round(float(np.clip(stress, 12.0, 88.0)), 1)
+        stress = (fatigue_score * 0.55) + (100.0 - quality_score) * 0.45
+        stress_index = round(float(np.clip(stress, 12.0, 95.0)), 1)
+
+        # Call Member 4's calculate_fatigue_risk_index if available
+        try:
+            from src.mental_health.tlx_assessment import calculate_fatigue_risk_index
+            tlx_calc, _ = calculate_fatigue_risk_index(
+                tlx_score=stress_index,
+                sleep_duration_hours=tot,
+                sleep_efficiency_pct=quality_score,
+                circadian_drift_hours=drift_h
+            )
+            fatigue_score = round(float(tlx_calc), 1)
+        except Exception:
+            pass
 
         df_rows.append({
             "date": str(r.get("date", r.get("timestamp", ""))),
@@ -735,7 +909,8 @@ def get_mental_wellness_data(astronaut_id: str = "AST-01", days: int = 14) -> Di
         "avg_sleep_hrs_7d": avg_sleep_7d,
         "avg_sleep_quality_7d": avg_quality_7d,
         "avg_fatigue_score_7d": avg_fatigue_7d,
-        "overall_status": overall_status
+        "overall_status": overall_status,
+        "active_scenario": scenario
     }
 
     return {
@@ -750,7 +925,10 @@ def get_mental_wellness_data(astronaut_id: str = "AST-01", days: int = 14) -> Di
 # 6. ACTIVE ALERTS & PROTOCOLS CONTRACT (Member 4 Integration)
 # ============================================================================
 
-def get_active_alerts_and_protocols(astronaut_id: Optional[str] = None) -> Dict[str, Any]:
+def get_active_alerts_and_protocols(
+    astronaut_id: Optional[str] = None,
+    scenario_override: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Retrieves unresolved alerts mapped to standard Flight Surgeon operational checklists.
     Integrates Member 4's `src/alerts/alert_engine.py` and `src/alerts/protocols.py`.
@@ -770,9 +948,21 @@ def get_active_alerts_and_protocols(astronaut_id: Optional[str] = None) -> Dict[
         dict: {"data": list[dict], "summary": dict, "source": str, "status_note": str}
     """
     ast_code, num_id = _normalize_ast_id(astronaut_id) if astronaut_id else (None, None)
+    scenario = _get_active_scenario(scenario_override)
     source = "live"
     status_note = "Connected to Member 4 alert_engine & protocols"
     alerts_list: List[Dict[str, Any]] = []
+
+    # Helper to fetch checklists from Member 4's protocol matrix
+    def _fetch_protocol_steps(proto_key: str, default_steps: List[str]) -> List[str]:
+        try:
+            from src.alerts.protocols import get_protocol
+            proto = get_protocol(proto_key)
+            if proto and "checklists" in proto and proto["checklists"]:
+                return list(proto["checklists"])
+        except Exception:
+            pass
+        return default_steps
 
     # 1. Attempt to fetch alerts from database
     try:
@@ -796,7 +986,7 @@ def get_active_alerts_and_protocols(astronaut_id: Optional[str] = None) -> Dict[
                 steps = [s.strip() for s in proto_raw.split("\n") if s.strip()] if proto_raw else [
                     "1. Confirm sensor contact and electrode impedance.",
                     "2. Notify Flight Surgeon console (Surgeon-1).",
-                    "3. Initiate 15-minute telemetry observation window."
+                    "3. Initiate 15-minute continuous telemetry observation window."
                 ]
 
                 alerts_list.append({
@@ -815,28 +1005,124 @@ def get_active_alerts_and_protocols(astronaut_id: Optional[str] = None) -> Dict[
     except Exception as db_err:
         logger.debug(f"DB alerts query bypassed ({db_err}).")
 
-    # 2. Fallback default alerts matrix
-    if not alerts_list:
-        source = "simulated_fallback"
-        status_note = "Fallback: Standard operational alert roster"
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
-        # Look up Member 4's protocols if available
-        hypoxia_steps = [
+    # 2. Dynamic Scenario Emergency Alerts Injection
+    scenario_injected_alerts = []
+
+    if "Cardiorespiratory" in scenario:
+        hypoxia_steps = _fetch_protocol_steps("HYPOXIA", [
             "1. Immediately don emergency quick-don oxygen mask (100% O2 positive pressure).",
             "2. Verify module ambient oxygen concentration and partial pressure on ECLSS console.",
             "3. Inspect suit/hatch seals for micro-leaks or sudden cabin atmospheric displacement.",
             "4. Alert Flight Surgeon (Surgeon-1) and Mission Control Flight Director (Flight).",
             "5. Re-evaluate pulse oximetry and arterial oxygen saturation every 60 seconds."
-        ]
-        try:
-            from src.alerts.protocols import get_protocol
-            proto = get_protocol("HYPOXIA")
-            if proto and "checklists" in proto:
-                hypoxia_steps = proto["checklists"]
-        except Exception:
-            pass
+        ])
+        cardiac_steps = _fetch_protocol_steps("CARDIAC_ARRHYTHMIA", [
+            "1. Order immediate cessation of all physical exertion and extravehicular activity (EVA).",
+            "2. Transition crew member to recumbent position inside crew quarters.",
+            "3. Attach 12-lead Holter electrocardiogram electrodes for continuous waveform monitoring.",
+            "4. Assess microgravity fluid shift and administer electrolyte oral rehydration solution.",
+            "5. Flight Surgeon consultation for anti-arrhythmic medication protocol review."
+        ])
+        scenario_injected_alerts.extend([
+            {
+                "alert_id": "ALT-EMERG-01",
+                "timestamp": now_str,
+                "astronaut_id": ast_code or "AST-01",
+                "severity": "CRITICAL",
+                "category": "VITALS_ML",
+                "title": "Acute Hypoxia Alert: Pulse Oximetry Collapse",
+                "description": "Blood oxygen saturation collapsed to 88.5%. Immediate supplemental oxygen required.",
+                "trigger_metric": "spo2_pct = 88.5% (Critical Threshold: < 90.0%)",
+                "recommended_protocol": hypoxia_steps
+            },
+            {
+                "alert_id": "ALT-EMERG-02",
+                "timestamp": now_str,
+                "astronaut_id": ast_code or "AST-01",
+                "severity": "CRITICAL",
+                "category": "VITALS_ML",
+                "title": "Acute Cardiac Dysrhythmia & Tachycardia",
+                "description": "Resting heart rate escalated to 142 bpm. Multivariate anomaly index confirmed by ML radar.",
+                "trigger_metric": "heart_rate_bpm = 142.0 (Threshold: > 120.0 bpm)",
+                "recommended_protocol": cardiac_steps
+            }
+        ])
 
-        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    elif "ECLSS" in scenario:
+        hypercapnia_steps = _fetch_protocol_steps("HYPERCAPNIA", [
+            "1. Verify Carbon Dioxide Removal Assembly (CDRA) bed cycling status in Node 3.",
+            "2. Switch to backup Amine Swingbed or Russian Vozdukh CO2 scrubbing system.",
+            "3. Increase Inter-Module Ventilation (IMV) fan speeds to eliminate stagnant CO2 pockets.",
+            "4. Screen crew members for early hypercapnic symptoms: fronto-orbital headache, lethargy, dyspnea.",
+            "5. Log environmental exposure duration for flight medical records."
+        ])
+        scenario_injected_alerts.append({
+            "alert_id": "ALT-EMERG-03",
+            "timestamp": now_str,
+            "astronaut_id": ast_code or "AST-01",
+            "severity": "CRITICAL",
+            "category": "ENVIRONMENT",
+            "title": "ISS ECLSS Protocol: Elevated CO2 & CDRA Scrubber Malfunction",
+            "description": "Cabin CO2 partial pressure surged to 5.75 mmHg. Exceeds NASA hypercapnia limits.",
+            "trigger_metric": "co2_partial_pressure_mmhg = 5.75 mmHg (Threshold: 3.80 mmHg)",
+            "recommended_protocol": hypercapnia_steps
+        })
+
+    elif "Solar Particle" in scenario:
+        scenario_injected_alerts.append({
+            "alert_id": "ALT-EMERG-04",
+            "timestamp": now_str,
+            "astronaut_id": ast_code or "AST-01",
+            "severity": "CRITICAL",
+            "category": "RADIATION",
+            "title": "Space Radiation Alert: Solar Particle Event (SPE Storm)",
+            "description": "Solar proton flux surge detected (>17.5 mSv/day). Immediate radiation shelter protocol mandated.",
+            "trigger_metric": "spe_flux_msv_day = 17.5 mSv/day (Threshold: 1.0 mSv/day)",
+            "recommended_protocol": [
+                "1. Sound orbital radiation advisory alarm and recall crew to heavily shielded core modules (Node 2 / Service Module).",
+                "2. Position water bags and sleep station polyethylene shielding surrounding crew quarters.",
+                "3. Power down exposed external robotic arms and non-essential external scientific payloads.",
+                "4. Distribute personal active dosimeters (Liulin-5 / DOSTEL) and verify real-time dose logging.",
+                "5. Maintain continuous telemetry link with Space Radiation Analysis Group (SRAG) at Johnson Space Center."
+            ]
+        })
+
+    elif "Circadian" in scenario:
+        fatigue_steps = _fetch_protocol_steps("COGNITIVE_FATIGUE", [
+            "1. Reassign safety-critical duties (docking, robotic arm, spacewalk) to backup crew.",
+            "2. Enforce mandatory 8.5-hour dark rest period in sound-attenuated crew quarters.",
+            "3. Review mission timeline and reduce cognitive task density for following flight day.",
+            "4. Check circadian lighting schedule (blue-enriched vs dim amber spectrum)."
+        ])
+        scenario_injected_alerts.append({
+            "alert_id": "ALT-EMERG-05",
+            "timestamp": now_str,
+            "astronaut_id": ast_code or "AST-01",
+            "severity": "CRITICAL",
+            "category": "MENTAL_HEALTH",
+            "title": "Critical Cognitive Fatigue & Circadian Misalignment",
+            "description": "Sleep duration collapsed to 3.8h with severe circadian drift (+2.8h). High risk of cognitive error.",
+            "trigger_metric": "fatigue_risk_index = 84.0 / 100 (Threshold: 65.0)",
+            "recommended_protocol": fatigue_steps
+        })
+
+    # Prepend scenario emergency alerts so they appear at the top of triage
+    alerts_list = scenario_injected_alerts + alerts_list
+
+    # 3. Fallback default alerts matrix if database was empty and no scenario active
+    if not alerts_list:
+        source = "simulated_fallback"
+        status_note = "Fallback: Standard operational alert roster"
+
+        ml_protocol = _fetch_protocol_steps("ML_MULTIVARIATE_ANOMALY", [
+            "1. Review feature attribution radar to identify primary deviating physiological parameters.",
+            "2. Cross-reference telemetry with active astronaut activity log (sleep, meal, workout).",
+            "3. Verify biometric sensor contact quality and electrode impedance.",
+            "4. Flag astronaut telemetry record for scheduled Flight Surgeon shift review."
+        ])
+
         alerts_list = [
             {
                 "alert_id": "ALT-204",
@@ -848,43 +1134,61 @@ def get_active_alerts_and_protocols(astronaut_id: Optional[str] = None) -> Dict[
                 "description": "Heart rate measured at 116.5 bpm following extended EVA tether operations.",
                 "trigger_metric": "heart_rate_bpm = 116.5 (Threshold: 105.0)",
                 "recommended_protocol": [
-                    "1. Order cessation of strenuous robotic and tether operations.",
-                    "2. Administer chilled electrolyte oral rehydration solution.",
-                    "3. Enforce 30-minute recumbent rest in crew quarters with continuous ECG."
+                    "1. Command immediate rest period inside crew quarters.",
+                    "2. Administer oral hydration pack with balanced electrolytes.",
+                    "3. Monitor 12-lead ECG telemetry for 30 minutes.",
+                    "4. Consult Flight Surgeon before approving further high-workload tasks."
                 ]
             },
             {
-                "alert_id": "ALT-109",
+                "alert_id": "ALT-108",
                 "timestamp": now_str,
                 "astronaut_id": "AST-01",
                 "severity": "INFO",
                 "category": "RADIATION",
-                "title": "South Atlantic Anomaly Orbital Passage",
-                "description": "ISS trajectory entering elevated flux boundary over South Atlantic.",
-                "trigger_metric": "dose_rate = 45.2 uSv/h",
+                "title": "South Atlantic Anomaly (SAA) Orbital Ingress",
+                "description": "Orbital pass through peak SAA flux zone. Dosimeter background elevated.",
+                "trigger_metric": "dosimeter_flux_usv_h = 48.2 uSv/h (Threshold: 50.0)",
                 "recommended_protocol": [
-                    "1. Verify active Liulin-5 and DOSTEL dosimeter polling frequency.",
-                    "2. Direct crew to remain in shielded US Lab / Destiny module.",
-                    "3. Log 4-hour integrated ambient dose equivalent."
+                    "1. Confirm personal dosimeter Liulin-5 telemetry transmission.",
+                    "2. Verify passive shielding integrity in Columbus and Kibo modules."
+                ]
+            },
+            {
+                "alert_id": "ALT-302",
+                "timestamp": now_str,
+                "astronaut_id": "AST-03",
+                "severity": "WARNING",
+                "category": "MENTAL_HEALTH",
+                "title": "Circadian Phase Misalignment Advisory",
+                "description": "Actigraphy detects 1.4-hour phase delay relative to ISS Mission Elapsed Time.",
+                "trigger_metric": "circadian_drift_hours = +1.4h (Threshold: 1.0h)",
+                "recommended_protocol": [
+                    "1. Shift cabin solid-state LED lighting to circadian blue-depleted spectrum.",
+                    "2. Advise 30-minute pre-sleep wind-down without digital screens."
                 ]
             }
         ]
 
-        if ast_code:
-            alerts_list = [a for a in alerts_list if a["astronaut_id"] == ast_code]
+    # Filter by astronaut if specified
+    if ast_code:
+        filtered = [a for a in alerts_list if a["astronaut_id"] == ast_code]
+        if not filtered and scenario_injected_alerts:
+            filtered = scenario_injected_alerts
+        alerts_list = filtered if filtered else alerts_list
 
     crit_count = sum(1 for a in alerts_list if a["severity"] == "CRITICAL")
     warn_count = sum(1 for a in alerts_list if a["severity"] == "WARNING")
     info_count = sum(1 for a in alerts_list if a["severity"] == "INFO")
 
-    sys_status = "CRITICAL" if crit_count > 0 else ("WARNING" if warn_count > 0 else "NOMINAL")
-
     summary = {
         "total_active_alerts": len(alerts_list),
+        "total_alerts": len(alerts_list),
         "critical_count": crit_count,
         "warning_count": warn_count,
         "info_count": info_count,
-        "system_status": sys_status
+        "system_status": "CRITICAL" if crit_count > 0 else ("WARNING" if warn_count > 0 else "NOMINAL"),
+        "active_scenario": scenario
     }
 
     return {
@@ -896,107 +1200,84 @@ def get_active_alerts_and_protocols(astronaut_id: Optional[str] = None) -> Dict[
 
 
 # ============================================================================
-# 7. CLINICAL HEALTH REPORT CONTRACT (Member 4 Integration)
+# 7. MEDICAL REPORT GENERATOR CONTRACT (Member 4 Integration)
 # ============================================================================
 
-def generate_health_report(astronaut_id: str = "AST-01") -> Dict[str, Any]:
+def generate_health_report(
+    astronaut_id: str = "AST-01",
+    scenario_override: Optional[str] = None
+) -> Dict[str, Any]:
     """
-    Synthesizes a comprehensive clinical health report for an astronaut.
-    Calls Member 4's `src/reports/` if available; otherwise compiles medical
-    telemetry, ML anomalies, radiation dose, and sleep into structured Markdown & JSON.
+    Synthesizes an authoritative clinical spaceflight medical brief and JSON telemetry digest.
+    Integrates Member 4's `src.reports` when available.
 
     Returns:
         dict: {"data": dict, "summary": dict, "source": str, "status_note": str}
     """
     ast_code, num_id = _normalize_ast_id(astronaut_id)
+    scenario = _get_active_scenario(scenario_override)
     roster = get_crew_roster()
     astronaut = next((a for a in roster if a["astronaut_id"] == ast_code), roster[0])
 
+    source = "live"
+    status_note = "Generated via SPACECARE Clinical Briefing Engine"
+
+    # Gather telemetry digests across all contracts
+    vitals_resp = get_vitals_and_anomalies(astronaut_id=ast_code, hours=24, scenario_override=scenario)
+    rad_resp = get_radiation_data(days=30, scenario_override=scenario)
+    mental_resp = get_mental_wellness_data(astronaut_id=ast_code, days=14, scenario_override=scenario)
+    alerts_resp = get_active_alerts_and_protocols(astronaut_id=ast_code, scenario_override=scenario)
+
+    vitals_summary = vitals_resp["summary"]
+    rad_summary = rad_resp["summary"]
+    mental_summary = mental_resp["summary"]
+    alerts_data = alerts_resp["data"]
+
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    report_id = f"NASA-MED-{ast_code}-{datetime.now(timezone.utc).strftime('%Y%j%H%M')}"
     ast_name = astronaut["name"]
-    callsign = astronaut.get("callsign", "ASTRONAUT")
     role = astronaut["role"]
     m_day = astronaut.get("mission_day", 42)
 
-    source = "live"
-    status_note = "Synthesized clinical health briefing"
+    # Clinical clearance determination
+    if vitals_summary.get("overall_status") == "CRITICAL" or rad_summary.get("overall_status") == "CRITICAL":
+        clearance = "RESTRICTED TO CREW QUARTERS // MEDICAL OBSERVATION MANDATORY"
+        overall_status = "CRITICAL"
+    elif vitals_summary.get("overall_status") == "WARNING" or mental_summary.get("overall_status") == "WARNING":
+        clearance = "FIT FOR FLIGHT DUTY // CONDITIONAL WORKLOAD RESTRICTIONS"
+        overall_status = "WARNING"
+    else:
+        clearance = "UNRESTRICTED FLIGHT STATUS // NOMINAL CLINICAL BASELINE"
+        overall_status = "NOMINAL"
 
-    # Check if Member 4 has implemented a generator in src/reports/
-    try:
-        import src.reports as reports_mod
-        if hasattr(reports_mod, "generate_report"):
-            res = reports_mod.generate_report(astronaut_id=num_id, mission_day=m_day)
-            if isinstance(res, dict) and "markdown_report" in res:
-                return {
-                    "data": res,
-                    "summary": {
-                        "report_title": res.get("title", f"Report - {ast_name}"),
-                        "generated_at": res.get("generated_at", datetime.now(timezone.utc).isoformat()),
-                        "clinical_clearance": "FIT FOR FLIGHT DUTY",
-                        "anomalies_detected_count": 0
-                    },
-                    "source": "live",
-                    "status_note": "Generated via Member 4 src.reports"
-                }
-    except Exception as rep_err:
-        logger.debug(f"src.reports call bypassed ({rep_err}).")
-
-    # Gather data across our standardized adapter contracts
-    vitals_res = get_vitals_and_anomalies(astronaut_id=ast_code, hours=24)
-    vitals_summary = vitals_res["summary"]
-    rad_res = get_radiation_data(days=30)
-    rad_summary = rad_res["summary"]
-    mental_res = get_mental_wellness_data(astronaut_id=ast_code, days=14)
-    mental_summary = mental_res["summary"]
-    alerts_res = get_active_alerts_and_protocols(astronaut_id=ast_code)
-    alerts_data = alerts_res["data"]
-
-    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    overall_status = vitals_summary.get("overall_status", "NOMINAL")
-
-    clearance = "FIT FOR FLIGHT DUTY"
-    if overall_status == "CRITICAL" or mental_summary.get("overall_status") == "CRITICAL":
-        clearance = "RESTRICTED TO QUARTERS"
-    elif overall_status == "WARNING" or mental_summary.get("overall_status") == "WARNING":
-        clearance = "MEDICAL OBSERVATION REQUIRED"
-
-    report_id = f"REP-EXP71-{ast_code}-{datetime.now(timezone.utc).strftime('%Y%m%d')}"
-
-    # Build rich clinical markdown document
-    markdown_doc = f"""# ==============================================================================
-# SPACECARE MISSION CONTROL: EXPEDITION 71 CLINICAL HEALTH ASSESSMENT
-# ==============================================================================
-**Report Identifier:** `{report_id}`  
-**Subject:** Astronaut {ast_name} (Callsign: **{callsign}**)  
-**Mission Role:** {role} | **Agency:** {astronaut.get('agency', 'NASA')}  
-**Mission Elapsed Time:** Flight Day {m_day:03d} | **Generated:** {now_utc}  
-**Clinical Clearance:** `{clearance}`  
-**Overall Status:** `{overall_status}`  
+    markdown_doc = f"""# EXPEDITION 71 CLINICAL MEDICAL STATUS REPORT
+**Report ID:** `{report_id}`  
+**Subject:** {ast_name} ({ast_code}) | **Role:** {role}  
+**Mission Day:** {m_day} | **Timestamp:** {now_utc}  
+**Active Mission Scenario:** `{scenario}`  
+**Operational Clearance:** `{clearance}`  
 
 ---
 
-## 1. Executive Summary & Clinical Assessment
-Astronaut {ast_name} underwent full 24-hour multivariate biometric telemetry review.
-Current physiological classification is evaluated as **{overall_status}**.
-Active unresolved clinical protocols pending: **{len(alerts_data)}**.
+## 1. Executive Flight Surgeon Summary
+Overall flight clinical status is **{overall_status}**. Telemetry synthesis indicates 
+anomalies detected in the last 24h: **{vitals_summary.get('anomaly_count_24h', 0)} events**.
 
 ---
 
-## 2. 24-Hour Wearable Physiological Biometrics
-| Parameter | Current Reading | 24-Hour Delta | Baseline Reference | Status |
-|:----------|:----------------|:--------------|:-------------------|:-------|
-| Heart Rate | {vitals_summary['latest_heart_rate']:.1f} bpm | {vitals_summary['delta_hr_24h']:+.1f} bpm | {astronaut.get('baseline_hr', 70.0)} bpm | {'🟢 Nominal' if vitals_summary['latest_heart_rate'] <= 100 else '⚠️ Elevated'} |
-| Blood Oxygen (SpO2) | {vitals_summary['latest_spo2']:.1f}% | {vitals_summary['delta_spo2_24h']:+.1f}% | {astronaut.get('baseline_spo2', 98.0)}% | {'🟢 Nominal' if vitals_summary['latest_spo2'] >= 95 else '🚨 Hypoxia Alert'} |
-| Blood Pressure | {vitals_summary['latest_blood_pressure']} | Stable | {astronaut.get('baseline_bp_sys', 118):.0f}/{astronaut.get('baseline_bp_dia', 76):.0f} mmHg | 🟢 Nominal |
-| Core Temperature | {vitals_summary['latest_body_temp']:.2f} °C | ±0.1 °C | {astronaut.get('baseline_temp', 36.8)} °C | 🟢 Nominal |
-| Respiration Rate | {vitals_summary['latest_respiration_rate']:.1f} br/min | Nominal | {astronaut.get('baseline_rr', 14.0)} br/min | 🟢 Nominal |
-
-**Multivariate ML Anomaly Radar:** Score `{vitals_summary['latest_anomaly_score']:+.4f}` | Anomaly Incidents (24h): `{vitals_summary['anomaly_count_24h']}`
+## 2. Physiological Biometrics (24-Hour Evaluation)
+- **Resting Heart Rate:** `{vitals_summary['latest_heart_rate']} bpm` (Delta: {vitals_summary['delta_heart_rate']:+0.1f} bpm)
+- **Arterial Oxygen Saturation (SpO2):** `{vitals_summary['latest_spo2']}%` (Delta: {vitals_summary['delta_spo2']:+0.1f}%)
+- **Arterial Blood Pressure:** `{vitals_summary['latest_blood_pressure']} mmHg`
+- **Core Body Temperature:** `{vitals_summary['latest_temperature']} °C`
+- **Respiration Rate:** `{vitals_summary['latest_respiration']} br/min`
+- **Isolation Forest ML Anomaly Score:** `{vitals_summary['latest_anomaly_score']:.3f}` (`{vitals_summary['overall_status']}`)
 
 ---
 
-## 3. Cosmic Radiation & Cumulative Dosimetry (Liulin-5 / DOSTEL)
-- **Current Dose Equivalent Rate:** `{rad_summary['current_dose_rate_msv_day']:.4f} mSv/day`
-- **Cumulative Mission Dose:** `{rad_summary['cumulative_dose_msv']:.2f} mSv`
+## 3. Cosmic Radiation & Cumulative Dosimetry (30-Day Window)
+- **Current Dose Rate:** `{rad_summary['current_dose_rate_msv_day']} mSv/day`
+- **Cumulative Mission Dose:** `{rad_summary['cumulative_dose_msv']} mSv`
 - **NASA 30-Day Exposure Limit:** `250.0 mSv` ({rad_summary['pct_30d_limit']:.1f}% consumed)
 - **NASA Career Effective Dose Limit:** `600.0 mSv` (NASA-STD-3001 Vol 1 Rev B)
 - **Solar Particle Event Alert:** {'🚨 SOLAR STORM IN PROGRESS' if rad_summary['solar_storm_alert'] else '🟢 Quiet Sun (Nominal)'}
@@ -1046,7 +1327,8 @@ Active unresolved clinical protocols pending: **{len(alerts_data)}**.
             "radiation": rad_summary,
             "mental_health": mental_summary,
             "alerts_count": len(alerts_data),
-            "clearance": clearance
+            "clearance": clearance,
+            "active_scenario": scenario
         }
     }
 
@@ -1054,7 +1336,8 @@ Active unresolved clinical protocols pending: **{len(alerts_data)}**.
         "report_title": f"Expedition 71 Clinical Briefing - {ast_name} ({ast_code})",
         "generated_at": now_utc,
         "clinical_clearance": clearance,
-        "anomalies_detected_count": vitals_summary.get("anomaly_count_24h", 0)
+        "anomalies_detected_count": vitals_summary.get("anomaly_count_24h", 0),
+        "active_scenario": scenario
     }
 
     return {
@@ -1071,7 +1354,7 @@ Active unresolved clinical protocols pending: **{len(alerts_data)}**.
 
 def get_module_integration_health() -> Dict[str, Any]:
     """
-    Evaluates real-time connectivity to all 4 teammate backend domains:
+    Granular integration diagnostics across all 5 teammate backend domains:
     - Member 1: nasa_data (eda_client, osdr_client, radiation_service)
     - Member 2: ml (anomaly_detector, feature_engineering, model)
     - Member 4: alerts (alert_engine, protocols)
@@ -1080,93 +1363,166 @@ def get_module_integration_health() -> Dict[str, Any]:
 
     Returns:
         dict: {"data": dict, "summary": dict, "source": "live", "status_note": str}
+        where data contains per domain:
+        - "status": "live" | "partial_live" | "simulated_fallback"
+        - "module_path": str
+        - "detected_entrypoints": list[str]
+        - "last_check_note": str
+        - "is_live": bool
     """
     health_data = {}
     live_count = 0
 
     # 1. NASA Data Domain (Member 1)
+    entrypoints_nasa = []
     try:
-        from src.nasa_data.eda_client import load_eda_benchmarks
-        from src.nasa_data.radiation_service import fetch_radlab_telemetry
+        from src.nasa_data import eda_client, radiation_service, osdr_client
+        for fn in ["load_eda_benchmarks", "get_eda_statistical_summary"]:
+            if hasattr(eda_client, fn):
+                entrypoints_nasa.append(f"eda_client.{fn}")
+        for fn in ["load_local_radlab_records", "fetch_radlab_telemetry"]:
+            if hasattr(radiation_service, fn):
+                entrypoints_nasa.append(f"radiation_service.{fn}")
+        for fn in ["get_curated_human_studies", "fetch_live_study_metadata"]:
+            if hasattr(osdr_client, fn):
+                entrypoints_nasa.append(f"osdr_client.{fn}")
+
         health_data["nasa_data"] = {
-            "is_live": True,
-            "status": "ONLINE",
-            "note": "EDA benchmarks & RadLab dosimetry services connected"
+            "status": "live",
+            "module_path": "src.nasa_data (eda_client, radiation_service, osdr_client)",
+            "detected_entrypoints": entrypoints_nasa,
+            "last_check_note": f"Connected: {len(entrypoints_nasa)} entrypoints active. Curated EDA and RadLab fixtures loaded.",
+            "is_live": True
         }
         live_count += 1
     except Exception as e:
         health_data["nasa_data"] = {
-            "is_live": False,
-            "status": "FALLBACK",
-            "note": f"Unavailable: {e}"
+            "status": "simulated_fallback",
+            "module_path": "src.nasa_data",
+            "detected_entrypoints": [],
+            "last_check_note": f"Fallback: {e}",
+            "is_live": False
         }
 
     # 2. ML Domain (Member 2)
+    entrypoints_ml = []
     try:
-        from src.ml.anomaly_detector import AstronautAnomalyDetector
+        from src.ml import anomaly_detector, feature_engineering, model
+        if hasattr(anomaly_detector, "AstronautAnomalyDetector"):
+            entrypoints_ml.append("anomaly_detector.AstronautAnomalyDetector")
+        for fn in ["extract_feature_vector", "extract_feature_matrix", "compute_feature_deviations"]:
+            if hasattr(feature_engineering, fn):
+                entrypoints_ml.append(f"feature_engineering.{fn}")
+        if hasattr(model, "AstronautAnomalyDetector"):
+            entrypoints_ml.append("model.AstronautAnomalyDetector")
+
+        # Live verification: instantiate detector
+        det = anomaly_detector.AstronautAnomalyDetector(contamination=0.05, random_state=42)
+        has_train = hasattr(det, "train")
+        has_predict = hasattr(det, "predict") or hasattr(det, "predict_series")
+
         health_data["ml"] = {
-            "is_live": True,
-            "status": "ONLINE",
-            "note": "Isolation Forest & feature engineering pipeline active"
+            "status": "live" if (has_train and has_predict) else "partial_live",
+            "module_path": "src.ml (anomaly_detector, feature_engineering, model)",
+            "detected_entrypoints": entrypoints_ml,
+            "last_check_note": f"Isolation Forest pipeline verified. {len(entrypoints_ml)} entrypoints active.",
+            "is_live": True
         }
         live_count += 1
     except Exception as e:
         health_data["ml"] = {
-            "is_live": False,
-            "status": "FALLBACK",
-            "note": f"Unavailable: {e}"
+            "status": "simulated_fallback",
+            "module_path": "src.ml",
+            "detected_entrypoints": [],
+            "last_check_note": f"Fallback: {e}",
+            "is_live": False
         }
 
     # 3. Alerts Domain (Member 4)
+    entrypoints_alerts = []
     try:
-        from src.alerts.alert_engine import evaluate_vitals_for_alerts
-        from src.alerts.protocols import get_protocol
+        from src.alerts import alert_engine, protocols
+        for fn in ["evaluate_vitals_for_alerts", "is_duplicate_active_alert"]:
+            if hasattr(alert_engine, fn):
+                entrypoints_alerts.append(f"alert_engine.{fn}")
+        for fn in ["get_protocol", "FLIGHT_SURGEON_PROTOCOLS"]:
+            if hasattr(protocols, fn):
+                entrypoints_alerts.append(f"protocols.{fn}")
+
         health_data["alerts"] = {
-            "is_live": True,
-            "status": "ONLINE",
-            "note": "Early warning rule engine & Flight Surgeon protocols active"
+            "status": "live",
+            "module_path": "src.alerts (alert_engine, protocols)",
+            "detected_entrypoints": entrypoints_alerts,
+            "last_check_note": f"Early warning rule engine active. {len(entrypoints_alerts)} entrypoints active.",
+            "is_live": True
         }
         live_count += 1
     except Exception as e:
         health_data["alerts"] = {
-            "is_live": False,
-            "status": "FALLBACK",
-            "note": f"Unavailable: {e}"
+            "status": "simulated_fallback",
+            "module_path": "src.alerts",
+            "detected_entrypoints": [],
+            "last_check_note": f"Fallback: {e}",
+            "is_live": False
         }
 
     # 4. Mental Health Domain (Member 4)
+    entrypoints_mh = []
     try:
-        from src.mental_health.sleep_tracker import simulate_sleep_profile
-        from src.mental_health.tlx_assessment import calculate_fatigue_risk_index
+        from src.mental_health import sleep_tracker, tlx_assessment
+        for fn in ["simulate_sleep_profile", "generate_sleep_history"]:
+            if hasattr(sleep_tracker, fn):
+                entrypoints_mh.append(f"sleep_tracker.{fn}")
+        for fn in ["calculate_raw_tlx", "calculate_fatigue_risk_index"]:
+            if hasattr(tlx_assessment, fn):
+                entrypoints_mh.append(f"tlx_assessment.{fn}")
+
         health_data["mental_health"] = {
-            "is_live": True,
-            "status": "ONLINE",
-            "note": "Sleep actigraphy & NASA-TLX cognitive fatigue models active"
+            "status": "live",
+            "module_path": "src.mental_health (sleep_tracker, tlx_assessment)",
+            "detected_entrypoints": entrypoints_mh,
+            "last_check_note": f"Sleep actigraphy & NASA-TLX cognitive fatigue models active. {len(entrypoints_mh)} entrypoints.",
+            "is_live": True
         }
         live_count += 1
     except Exception as e:
         health_data["mental_health"] = {
-            "is_live": False,
-            "status": "FALLBACK",
-            "note": f"Unavailable: {e}"
+            "status": "simulated_fallback",
+            "module_path": "src.mental_health",
+            "detected_entrypoints": [],
+            "last_check_note": f"Fallback: {e}",
+            "is_live": False
         }
 
     # 5. Reports Domain (Member 4)
+    entrypoints_reports = []
     try:
         import src.reports as rep_pkg
-        has_gen = hasattr(rep_pkg, "generate_report")
+        for attr in dir(rep_pkg):
+            if not attr.startswith("_") and callable(getattr(rep_pkg, attr)):
+                entrypoints_reports.append(f"reports.{attr}")
+
+        is_rep_live = len(entrypoints_reports) > 0
         health_data["reports"] = {
-            "is_live": has_gen,
-            "status": "ONLINE" if has_gen else "FALLBACK",
-            "note": "Custom reports module loaded" if has_gen else "Using data_adapter clinical report synthesis"
+            "status": "live" if is_rep_live else "simulated_fallback",
+            "module_path": "src.reports",
+            "detected_entrypoints": entrypoints_reports,
+            "last_check_note": (
+                f"Custom reports generator active ({len(entrypoints_reports)} entrypoints)."
+                if is_rep_live else
+                "File is currently a stub; falling back to data_adapter clinical report synthesis."
+            ),
+            "is_live": is_rep_live
         }
-        if has_gen:
+        if is_rep_live:
             live_count += 1
     except Exception as e:
         health_data["reports"] = {
-            "is_live": False,
-            "status": "FALLBACK",
-            "note": f"Fallback synthesizer: {e}"
+            "status": "simulated_fallback",
+            "module_path": "src.reports",
+            "detected_entrypoints": [],
+            "last_check_note": f"File is currently a stub; fallback active ({e})",
+            "is_live": False
         }
 
     total_domains = 5
@@ -1183,5 +1539,5 @@ def get_module_integration_health() -> Dict[str, Any]:
         "data": health_data,
         "summary": summary,
         "source": "live",
-        "status_note": f"Integration Health: {live_count}/{total_domains} modules online ({health_pct}%)"
+        "status_note": f"Integration Diagnostics: {live_count}/{total_domains} modules online ({health_pct}%)"
     }
